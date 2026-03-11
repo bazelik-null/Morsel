@@ -45,7 +45,7 @@ fn main() {
 
 fn calculate(input: String) -> Result<f64, Box<dyn Error>> {
     // Parse expression
-    let tokens: Vec<tokens::Token> = interpreter::lexer::tokenize(input)?;
+    let tokens: Vec<tokens::Token> = interpreter::lexer::tokenize(&input)?;
 
     // Evaluate expression
     let eval: f64 = interpreter::evaluator::eval(&tokens)?;

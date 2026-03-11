@@ -1,7 +1,7 @@
 use crate::interpreter::tokens;
 use regex::Regex;
 
-pub fn tokenize(string: String) -> Result<Vec<tokens::Token>, &'static str> {
+pub fn tokenize(string: &String) -> Result<Vec<tokens::Token>, &'static str> {
     // Create a token vector
     let mut tokens: Vec<tokens::Token> = Vec::with_capacity(string.len());
 
