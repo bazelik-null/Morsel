@@ -1,14 +1,6 @@
-#[derive(Debug, Default, Copy, Clone)]
-pub enum OperatorType {
-    ADD,
-    SUBTRACT,
-    MULTIPLY,
-    DIVIDE,
-    #[default]
-    UNKNOWN,
-}
+use crate::interpreter::operators::OperatorType;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum Token {
     Operator(OperatorType),
     Number(f64),

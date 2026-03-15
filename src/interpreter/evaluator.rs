@@ -1,44 +1,55 @@
-use crate::interpreter::tokens::{OperatorType, Token};
+use crate::interpreter::ast::node::Node;
+use crate::interpreter::operators::OperatorType;
 
-pub fn eval(tokens: &[Token]) -> Result<f64, &'static str> {
-    if tokens.is_empty() {
-        return Err("No tokens found");
-    }
-
-    let mut result = 0.0;
-    let mut operation = OperatorType::ADD;
-    let mut last_number: Option<f64> = None;
-
-    // Evaluate each token
-    for token in tokens {
-        match token {
-            Token::Number(n) => {
-                last_number = Some(*n);
-            }
-            Token::Operator(op_type) => {
-                let number = last_number.ok_or("Expected number before operator")?;
-
-                result = apply_operation(result, number, &operation);
-
-                operation = *op_type;
-                last_number = None;
-            }
-        }
-    }
-
-    // Apply the final operation
-    let final_number = last_number.ok_or("Expression ends with operator")?;
-    result = apply_operation(result, final_number, &operation);
-
-    Ok(result)
+/// Evaluates an AST and returns evaluation result.
+pub fn eval(node: &Node) -> Result<f64, String> {
+    eval_node(node)
 }
 
-fn apply_operation(result: f64, value: f64, operation: &OperatorType) -> f64 {
+fn eval_node(node: &Node) -> Result<f64, String> {
+    match node {
+        // Number
+        Node::Number(value) => Ok(*value),
+
+        // Unary expression
+        Node::UnaryExpr { op, child } => {
+            // Evaluate child node
+            let child_value = eval_node(child)?;
+
+            apply_unary_operation(child_value, op)
+        }
+
+        // Binary expression
+        Node::BinaryExpr { op, lvalue, rvalue } => {
+            // Evaluate lvalue
+            let left = eval_node(lvalue)?;
+            // Evaluate rvalue
+            let right = eval_node(rvalue)?;
+
+            apply_binary_operation(left, right, op)
+        }
+    }
+}
+
+fn apply_unary_operation(value: f64, operation: &OperatorType) -> Result<f64, String> {
     match operation {
-        OperatorType::ADD => result + value,
-        OperatorType::SUBTRACT => result - value,
-        OperatorType::MULTIPLY => result * value,
-        OperatorType::DIVIDE => result / value,
-        _ => result,
+        OperatorType::Negate => Ok(-value),
+        _ => Err(format!("Invalid unary operator: {:?}", operation)),
+    }
+}
+
+fn apply_binary_operation(left: f64, right: f64, operation: &OperatorType) -> Result<f64, String> {
+    match operation {
+        OperatorType::Add => Ok(left + right),
+        OperatorType::Subtract => Ok(left - right),
+        OperatorType::Multiply => Ok(left * right),
+        OperatorType::Divide => {
+            if right == 0.0 {
+                Err("Division by zero".to_string())
+            } else {
+                Ok(left / right)
+            }
+        }
+        _ => Err(format!("Invalid binary operator: {:?}", operation)),
     }
 }
