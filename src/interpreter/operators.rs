@@ -13,12 +13,12 @@ pub enum OperatorType {
     Log,      // x(base) log y(arg)
     Ln,       // ln x
     // Trigonometry
-    Cos,    // cos x
-    Sin,    // sin x
-    Tan,    // tan x
-    Acos,   // arccos x
-    Asin,   // arcsin x
-    Atan,   // arctan x
+    Cos,  // cos x
+    Sin,  // sin x
+    Tan,  // tan x
+    Acos, // arccos x
+    Asin, // arcsin x
+    Atan, // arctan x
     // Misc
     Negate, // -x
     Modulo, // x % y
@@ -47,7 +47,6 @@ impl OperatorType {
     pub fn is_exponentiation(&self) -> bool {
         matches!(self, OperatorType::Exponent)
     }
-
 
     pub fn is_unary(&self) -> bool {
         matches!(

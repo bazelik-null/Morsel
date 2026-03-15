@@ -1,6 +1,6 @@
-use std::ops::Neg;
 use crate::interpreter::ast::node::Node;
 use crate::interpreter::operators::OperatorType;
+use std::ops::Neg;
 
 /// Evaluates an AST and returns evaluation result.
 pub fn eval(node: &Node) -> Result<f64, String> {
