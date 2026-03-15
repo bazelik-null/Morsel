@@ -1,8 +1,5 @@
-use crate::interpreter;
-use crate::interpreter::ast::parser;
-use crate::interpreter::tokenizer::lexer;
-
 use crate::cli::app_state::AppState;
+use crate::cli::backend::{calculate, eval_file};
 use crate::cli::calc_errors::CalcError;
 use crate::cli::cmd::Command;
 
@@ -42,13 +39,20 @@ fn handle_input_cycle(state: &mut AppState, input_buffer: &mut String) -> bool {
 
     // Check for commands
     match Command::from_input(trimmed) {
-        Command::Exit | Command::Quit => return false,
+        Command::Exit => return false,
         Command::Debug => {
             state.toggle_debug();
             return true;
         }
         Command::Help => {
             print_help();
+            return true;
+        }
+        Command::File(file_path) => {
+            match eval_file(file_path.as_str(), state.is_debug) {
+                Ok(_) => {} // eval_file prints result.
+                Err(err) => eprintln!("[ERROR]: {}", err),
+            }
             return true;
         }
         Command::Unknown => {} // Continue to calculation
@@ -61,42 +65,6 @@ fn handle_input_cycle(state: &mut AppState, input_buffer: &mut String) -> bool {
     }
 
     true
-}
-
-// Backend
-
-/// Takes a raw input string and:
-/// 1. Parses string into Tokens array.
-/// 2. Builds Abstract Syntax Tree (AST) from Tokens.
-/// 3. Evaluates AST Nodes and returns result.
-fn calculate(input: &str, is_debug: bool) -> Result<f64, CalcError> {
-    if is_debug {
-        println!("[DEBUG]: Raw input: {}", input);
-    }
-
-    // Tokenize
-    let tokens = lexer::tokenize(input).map_err(|e| CalcError::Tokenize(e.to_string()))?;
-
-    if is_debug {
-        println!("[DEBUG]: Tokens: {:?}", tokens);
-    }
-
-    // Parse into AST
-    let mut parser = parser::Parser::new(tokens);
-    let ast = parser
-        .parse()
-        .map_err(|e| CalcError::Parse(e.to_string()))?;
-
-    if is_debug {
-        println!("[DEBUG]: Raw AST: {:?}", ast);
-        println!("[DEBUG]: Pretty AST: {}", ast);
-    }
-
-    // Evaluate AST
-    let result =
-        interpreter::evaluator::eval(&ast).map_err(|e| CalcError::Evaluate(e.to_string()))?;
-
-    Ok(result)
 }
 
 // UI
@@ -116,6 +84,7 @@ fn print_prompt() {
 fn print_help() {
     println!("Available commands:");
     println!("  help     - Show this help message.");
+    println!("  file     - Evaluate passed file.");
     println!("  debug    - Toggle debug mode.");
     println!("  exit     - Exit.");
     println!();

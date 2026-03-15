@@ -1,18 +1,27 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
     Debug,
+    File(String),
     Help,
     Exit,
-    Quit,
     Unknown,
 }
 
 impl Command {
     pub fn from_input(input: &str) -> Self {
-        match input.to_lowercase().as_str() {
-            "debug" => Command::Debug,
-            "help" => Command::Help,
-            "exit" => Command::Exit,
+        let parts: Vec<&str> = input.split_whitespace().collect();
+
+        match parts.first().map(|s| s.to_lowercase()).as_deref() {
+            Some("debug") => Command::Debug,
+            Some("file") => {
+                if let Some(filename) = parts.get(1) {
+                    Command::File(filename.to_string())
+                } else {
+                    Command::Unknown
+                }
+            }
+            Some("help") => Command::Help,
+            Some("exit") => Command::Exit,
             _ => Command::Unknown,
         }
     }
