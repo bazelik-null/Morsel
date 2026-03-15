@@ -64,7 +64,36 @@ impl Parser {
             self.advance();
 
             // Parse right operand
-            let right = self.parse_unary()?;
+            let right = self.parse_exponent()?;
+
+            // Build binary expression node
+            left = Node::BinaryExpr {
+                op,
+                lvalue: Box::new(left),
+                rvalue: Box::new(right),
+            };
+        }
+
+        Ok(left)
+    }
+
+    /// Handles high precedence (exponentiation)
+    fn parse_exponent(&mut self) -> Result<Node, String> {
+        // Parse left operand
+        let mut left = self.parse_unary()?;
+
+        // Keep parsing exponentiation operators and their right operands
+        while let Some(op) = self.peek_operator() {
+            // Stop if the next operator is not exponentiation
+            if !op.is_exponentiation() {
+                break;
+            }
+
+            // Consume the operator
+            self.advance();
+
+            // Parse right operand
+            let right = self.parse_exponent()?;
 
             // Build binary expression node
             left = Node::BinaryExpr {

@@ -13,7 +13,7 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
     let cleaned = input.replace(char::is_whitespace, "");
 
     // Regex to capture numbers, operators and words
-    let regex = Regex::new(r"(\d+\.?\d|[+\-/()=^]|[a-zA-Z_]+|\d)").unwrap();
+    let regex = Regex::new(r"(\d+\.\d+|\d+|[a-zA-Z_]+|[+\-*/()=^])").unwrap();
 
     let mut tokens: Vec<Token> = regex
         .find_iter(&cleaned)

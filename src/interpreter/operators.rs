@@ -39,11 +39,15 @@ impl OperatorType {
             self,
             OperatorType::Multiply
                 | OperatorType::Divide
-                | OperatorType::Exponent
                 | OperatorType::Log
                 | OperatorType::Modulo
         )
     }
+
+    pub fn is_exponentiation(&self) -> bool {
+        matches!(self, OperatorType::Exponent)
+    }
+
 
     pub fn is_unary(&self) -> bool {
         matches!(
