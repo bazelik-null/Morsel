@@ -36,7 +36,6 @@ fn parse_token(lexeme: &str) -> Result<Token, String> {
     match lexeme {
         "pi" => return Ok(Token::Number(std::f64::consts::PI)),
         "e" => return Ok(Token::Number(std::f64::consts::E)),
-        "g" => return Ok(Token::Number(std::f64::consts::GOLDEN_RATIO)),
         _ => {}
     };
 
