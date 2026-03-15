@@ -1,11 +1,11 @@
 #[derive(Default)]
 pub struct AppState {
-	pub is_debug: bool,
+    pub is_debug: bool,
 }
 
 impl AppState {
-	pub fn toggle_debug(&mut self) {
-		self.is_debug = !self.is_debug;
-		println!("[INFO]: Debug mode: {}", self.is_debug);
-	}
+    pub fn toggle_debug(&mut self) {
+        self.is_debug = !self.is_debug;
+        println!("[INFO]: Debug mode: {}", self.is_debug);
+    }
 }
