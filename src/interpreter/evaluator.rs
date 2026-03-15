@@ -1,53 +1,44 @@
-use crate::interpreter::tokens;
+use crate::interpreter::tokens::{OperatorType, Token};
 
-pub fn eval(tokens: &Vec<tokens::Token>) -> Result<f64, &'static str> {
+pub fn eval(tokens: &[Token]) -> Result<f64, &'static str> {
     if tokens.is_empty() {
         return Err("No tokens found");
     }
 
-    let mut result: f64 = 0.0;
+    let mut result = 0.0;
+    let mut operation = OperatorType::ADD;
+    let mut last_number: Option<f64> = None;
 
-    // Track the current operation
-    let mut operation: tokens::TokenType = tokens::TokenType::ADD;
-
-    // Init previous tokens::Token register at the first tokens::Token
-    let mut previous_token: &tokens::Token = tokens.first().unwrap();
-
+    // Evaluate each token
     for token in tokens {
-        match token.token_type {
-            tokens::TokenType::ADD => {
-                result = apply_operation(result, previous_token.value.unwrap_or(0.0), operation);
-                operation = tokens::TokenType::ADD;
+        match token {
+            Token::Number(n) => {
+                last_number = Some(*n);
             }
-            tokens::TokenType::SUBTRACT => {
-                result = apply_operation(result, previous_token.value.unwrap_or(0.0), operation);
-                operation = tokens::TokenType::SUBTRACT;
-            }
-            tokens::TokenType::MULTIPLY => {
-                result = apply_operation(result, previous_token.value.unwrap_or(0.0), operation);
-                operation = tokens::TokenType::MULTIPLY;
-            }
-            tokens::TokenType::DIVIDE => {
-                result = apply_operation(result, previous_token.value.unwrap_or(0.0), operation);
-                operation = tokens::TokenType::DIVIDE;
-            }
-            _ => {}
-        }
+            Token::Operator(op_type) => {
+                let number = last_number.ok_or("Expected number before operator")?;
 
-        previous_token = token;
+                result = apply_operation(result, number, &operation);
+
+                operation = *op_type;
+                last_number = None;
+            }
+        }
     }
 
-    // Apply the last operation to the last number
-    result = apply_operation(result, previous_token.value.unwrap_or(0.0), operation);
+    // Apply the final operation
+    let final_number = last_number.ok_or("Expression ends with operator")?;
+    result = apply_operation(result, final_number, &operation);
+
     Ok(result)
 }
 
-fn apply_operation(result: f64, value: f64, operation: tokens::TokenType) -> f64 {
+fn apply_operation(result: f64, value: f64, operation: &OperatorType) -> f64 {
     match operation {
-        tokens::TokenType::ADD => result + value,
-        tokens::TokenType::SUBTRACT => result - value,
-        tokens::TokenType::MULTIPLY => result * value,
-        tokens::TokenType::DIVIDE => result / value,
+        OperatorType::ADD => result + value,
+        OperatorType::SUBTRACT => result - value,
+        OperatorType::MULTIPLY => result * value,
+        OperatorType::DIVIDE => result / value,
         _ => result,
     }
 }

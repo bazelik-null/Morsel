@@ -1,16 +1,39 @@
-#[derive(Debug, Default)]
-pub enum TokenType {
+#[derive(Debug, Default, Copy, Clone)]
+pub enum OperatorType {
     ADD,
     SUBTRACT,
     MULTIPLY,
     DIVIDE,
-    NUMBER,
     #[default]
     UNKNOWN,
 }
 
-#[derive(Debug, Default)]
-pub struct Token {
-    pub token_type: TokenType,
-    pub value: Option<f64>, // None if TokenType != Number
+#[derive(Debug)]
+pub enum Token {
+    Operator(OperatorType),
+    Number(f64),
+}
+
+impl Token {
+    pub fn is_number(&self) -> bool {
+        matches!(self, Token::Number(_))
+    }
+
+    pub fn is_operator(&self) -> bool {
+        matches!(self, Token::Operator(_))
+    }
+
+    pub fn as_number(&self) -> Option<f64> {
+        match self {
+            Token::Number(value) => Some(*value),
+            _ => None,
+        }
+    }
+
+    pub fn as_operator(&self) -> Option<&OperatorType> {
+        match self {
+            Token::Operator(op) => Some(op),
+            _ => None,
+        }
+    }
 }
