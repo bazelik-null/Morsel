@@ -13,12 +13,12 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
     }
 
     let cleaned = input.replace(char::is_whitespace, "").to_lowercase();
-    let tokens: Vec<Token> = Vec::new();
+    let mut tokens: Vec<Token> = Vec::new();
 
-    let tokens: Vec<Token> = TOKENIZER_REGEX
-        .find_iter(&cleaned)
-        .map(|m| parse_token(m.as_str(), &tokens)) // Parse tokens
-        .collect::<Result<Vec<Token>, String>>()?;
+    for m in TOKENIZER_REGEX.find_iter(&cleaned) {
+        let token = parse_token(m.as_str(), &tokens)?;
+        tokens.push(token);
+    }
 
     Ok(tokens)
 }
@@ -96,7 +96,7 @@ fn should_be_unary(preceding_tokens: &[Token]) -> bool {
     }
 
     match &preceding_tokens[preceding_tokens.len() - 1] {
-        Token::Operator(operator) => !operator.is_unary(),
+        Token::Operator(operator) => !matches!(operator, OperatorType::Unknown), // After any operator
         _ => false,
     }
 }
