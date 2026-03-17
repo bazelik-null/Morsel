@@ -1,5 +1,5 @@
 on: push
-name: Clippy
+name: Clippy and Tests
 
 env:
   RUSTFLAGS: "-Dwarnings"
@@ -11,3 +11,10 @@ jobs:
       - uses: actions/checkout@v3
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features
+
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run tests
+        run: cargo test --verbose
