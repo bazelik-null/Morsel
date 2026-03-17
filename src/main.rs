@@ -2,6 +2,7 @@
 
 pub mod cli;
 pub mod interpreter;
+mod tests;
 
 use std::env;
 
