@@ -26,7 +26,7 @@ impl Parser {
     pub fn parse(&mut self) -> Result<Node, String> {
         let expr = self.parse_precedence(Precedence::Additive)?;
         if self.pos < self.tokens.len() {
-            return Err(format!("Unexpected token at position {}", self.pos));
+            return Err(format!("Unexpected token at {}", self.pos));
         }
 
         Ok(expr)
@@ -135,8 +135,8 @@ impl Parser {
             }
 
             Some(Token::Operator(op)) => Err(format!(
-                "Unexpected operator '{}' in primary expression",
-                op
+                "Unexpected operator '{}' in primary expression at token {}",
+                op, self.pos
             )),
             None => Err("Unexpected end of input".to_string()),
         }
@@ -149,9 +149,17 @@ impl Parser {
 
                 Ok(())
             }
-
-            Some(op) => Err(format!("Expected '{}', found '{}'", expected, op)),
-            None => Err(format!("Expected '{}', found end of input", expected)),
+            Some(op) => Err(format!(
+                "Expected '{}', found '{}' at token {} (token: {:?})",
+                expected,
+                op,
+                self.pos,
+                self.peek()
+            )),
+            None => Err(format!(
+                "Expected '{}', found end of input at token {}",
+                expected, self.pos
+            )),
         }
     }
 

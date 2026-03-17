@@ -18,14 +18,14 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
     let mut tokens = Vec::new();
 
     for m in TOKENIZER_REGEX.find_iter(&cleaned) {
-        let token = parse_token(m.as_str(), &tokens)?;
+        let token = parse_token(m.as_str(), &tokens, m.end())?;
         tokens.push(token);
     }
 
     Ok(tokens)
 }
 
-fn parse_token(lexeme: &str, preceding_tokens: &[Token]) -> Result<Token, String> {
+fn parse_token(lexeme: &str, preceding_tokens: &[Token], pos: usize) -> Result<Token, String> {
     // Try parsing as number
     if let Ok(value) = lexeme.parse::<f64>() {
         return Ok(Token::Number(value));
@@ -37,7 +37,7 @@ fn parse_token(lexeme: &str, preceding_tokens: &[Token]) -> Result<Token, String
     }
 
     // Parse as operator
-    let mut op = parse_operator(lexeme)?;
+    let mut op = parse_operator(lexeme, pos)?;
 
     // Convert subtract to negate if it's a unary operator
     if op == OperatorType::Subtract && is_unary_position(preceding_tokens) {
@@ -57,7 +57,7 @@ fn try_parse_constant(lexeme: &str) -> Option<f64> {
 }
 
 /// Maps lexeme strings to operator types
-fn parse_operator(lexeme: &str) -> Result<OperatorType, String> {
+fn parse_operator(lexeme: &str, pos: usize) -> Result<OperatorType, String> {
     let op = match lexeme {
         // Arithmetic
         "+" => OperatorType::Add,
@@ -88,7 +88,7 @@ fn parse_operator(lexeme: &str) -> Result<OperatorType, String> {
         "(" => OperatorType::LParen,
         ")" => OperatorType::RParen,
 
-        _ => return Err(format!("Unknown token: '{}'", lexeme)),
+        _ => return Err(format!("Unknown token at position {}: '{}'", pos, lexeme)),
     };
 
     Ok(op)
