@@ -92,10 +92,10 @@ fn test_natural_logarithm() {
 
 #[test]
 fn test_logarithm() {
-    let result = calculate("10 log(100)", false).unwrap();
+    let result = calculate("log(10, 100)", false).unwrap();
     assert_approx_eq(result, 2.0, 0.0001);
 
-    let result = calculate("2 log(8)", false).unwrap();
+    let result = calculate("log(2, 8)", false).unwrap();
     assert_approx_eq(result, 3.0, 0.0001);
 }
 

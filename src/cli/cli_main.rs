@@ -75,9 +75,9 @@ fn handle_input_cycle(state: &mut AppState, input_buffer: &mut String) -> bool {
 // UI
 
 fn print_banner() {
-    println!("====================================================");
-    println!("==== RetardCalc: Rust math expression evaluator ====");
-    println!("====================================================");
+    println!("======================================");
+    println!("==== Morsel Interpreter Interface ====");
+    println!("======================================");
     println!();
 }
 
@@ -109,7 +109,7 @@ fn print_func() {
     println!("Exponent and Logarithmic Operations:");
     println!("  Exponentiation:    x ^ y");
     println!("  Square root:       sqrt(x)");
-    println!("  Logarithm:         x log(y) [where x is base, y is argument]");
+    println!("  Logarithm:         log(x, y) [where x is base, y is argument]");
     println!("  Natural logarithm: ln(x)\n");
 
     println!("Trigonometric Functions:");
@@ -124,7 +124,9 @@ fn print_func() {
     println!("  Negation:           -x");
     println!("  Modulo (remainder): x % y");
     println!("  Absolute value:     abs(x)");
-    println!("  Rounding:           round(x)\n");
+    println!("  Rounding:           round(x)");
+    println!("  Max value:          max(x, ...)");
+    println!("  Min value:          max(x, ...)\n");
 
     println!("  Unknown: Default value [invalid]\n");
 }

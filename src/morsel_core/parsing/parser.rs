@@ -1,8 +1,8 @@
 // Copyright (c) 2026 bazelik-null
 
-use crate::interpreter::ast::node::Node;
-use crate::interpreter::operators::{OperatorType, Precedence};
-use crate::interpreter::tokenizer::token::Token;
+use crate::morsel_core::lexing::operators::{OperatorType, Precedence};
+use crate::morsel_core::lexing::token::Token;
+use crate::morsel_core::parsing::node::Node;
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -13,9 +13,10 @@ pub struct Parser {
  * parse()                 [Entry point]
  * * parse_precedence()    [Handles binary operators with precedence]
  * * * parse_primary()     [Handles unary/function/atoms]
- * * * * parse_function()  [Function calls like cos(x)]
+ * * * * parse_function()  [Function calls like cos(x) or max(x, y, z)]
  * * * * parse_unary()     [Unary operators like -x]
  * * * * parse_atom()      [Numbers and parentheses]
+ * * * * parse_arguments() [Comma-separated argument lists]
  */
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
@@ -72,32 +73,54 @@ impl Parser {
     }
 
     fn parse_primary(&mut self) -> Result<Node, String> {
-        if let Some(op) = self.peek_operator() {
-            if op.is_function() {
-                return self.parse_function(op);
-            }
-            if op.is_unary() {
-                return self.parse_unary(op);
-            }
+        if let Some(func) = self.peek_function() {
+            return self.parse_function(func);
+        }
+
+        if let Some(op) = self.peek_operator()
+            && op.is_unary()
+        {
+            return self.parse_unary(op);
         }
 
         self.parse_atom()
     }
 
-    fn parse_function(&mut self, op: OperatorType) -> Result<Node, String> {
-        // Consume function operator
+    fn parse_function(&mut self, func: String) -> Result<Node, String> {
+        // Consume function token
         self.advance();
 
-        // Check for parenthesis and parse operands inside them
-        self.expect(OperatorType::LParen)?;
-        let arg = self.parse_precedence(Precedence::Additive)?;
-        self.expect(OperatorType::RParen)?;
+        // Check for parenthesis and parse arguments inside them
+        self.expect_operator(OperatorType::LParen)?;
+        let args = self.parse_arguments()?;
+        self.expect_operator(OperatorType::RParen)?;
 
-        // Build unary expression node
-        Ok(Node::UnaryExpr {
-            op,
-            child: Box::new(arg),
-        })
+        // Build function call node with multiple arguments
+        Ok(Node::FunctionCall { func, args })
+    }
+
+    /// Parse comma-separated arguments. Returns at least one argument.
+    fn parse_arguments(&mut self) -> Result<Vec<Node>, String> {
+        let mut args = Vec::new();
+
+        // Handle empty argument list (for functions that take no arguments)
+        if self.peek_operator() == Some(OperatorType::RParen) {
+            return Ok(args);
+        }
+
+        // Parse first argument
+        args.push(self.parse_precedence(Precedence::Additive)?);
+
+        // Parse remaining arguments separated by commas
+        while self.peek_operator() == Some(OperatorType::Comma) {
+            // Consume comma
+            self.advance();
+
+            // Parse next argument
+            args.push(self.parse_precedence(Precedence::Additive)?);
+        }
+
+        Ok(args)
     }
 
     fn parse_unary(&mut self, op: OperatorType) -> Result<Node, String> {
@@ -129,7 +152,7 @@ impl Parser {
                 // Consume left opening bracket, parse operands inside and check for closing bracket
                 self.advance();
                 let expr = self.parse_precedence(Precedence::Additive)?;
-                self.expect(OperatorType::RParen)?;
+                self.expect_operator(OperatorType::RParen)?;
 
                 Ok(expr)
             }
@@ -138,11 +161,15 @@ impl Parser {
                 "Unexpected operator '{}' in primary expression at token {}",
                 op, self.pos
             )),
+            Some(Token::Function(func)) => Err(format!(
+                "Unexpected function '{}' in primary expression at token {}",
+                func, self.pos
+            )),
             None => Err("Unexpected end of input".to_string()),
         }
     }
 
-    fn expect(&mut self, expected: OperatorType) -> Result<(), String> {
+    fn expect_operator(&mut self, expected: OperatorType) -> Result<(), String> {
         match self.peek_operator() {
             Some(op) if op == expected => {
                 self.advance();
@@ -169,6 +196,10 @@ impl Parser {
 
     fn peek_operator(&self) -> Option<OperatorType> {
         self.peek().and_then(|t| t.as_operator().cloned())
+    }
+
+    fn peek_function(&self) -> Option<String> {
+        self.peek().and_then(|t| t.as_function().cloned())
     }
 
     fn advance(&mut self) {
