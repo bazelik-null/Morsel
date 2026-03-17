@@ -2,7 +2,6 @@
 
 use crate::cli::app_state::AppState;
 use crate::cli::backend::{calculate, eval_file};
-use crate::cli::calc_errors::CalcError;
 use crate::cli::cmd::Command;
 
 use std::io::{self, Write};
@@ -28,7 +27,7 @@ fn handle_input_cycle(state: &mut AppState, input_buffer: &mut String) -> bool {
 
     input_buffer.clear();
     if let Err(e) = io::stdin().read_line(input_buffer) {
-        eprintln!("[ERROR]: {}", CalcError::IoError(e.to_string()));
+        eprintln!("[ERROR]: {}", e);
         return true; // Continue on IO error
     }
 

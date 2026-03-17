@@ -5,35 +5,30 @@ use crate::interpreter::evaluator;
 use crate::interpreter::tokenizer::lexer;
 use std::{fs, io};
 
-use crate::cli::calc_errors::CalcError;
-
 /// Takes a raw input string and:
 /// 1. Parses string into Tokens array.
 /// 2. Builds Abstract Syntax Tree (AST) from Tokens.
 /// 3. Evaluates AST Nodes and returns result.
-pub fn calculate(input: &str, is_debug: bool) -> Result<f64, CalcError> {
+pub fn calculate(input: &str, is_debug: bool) -> Result<f64, String> {
     if is_debug {
         println!("[DEBUG]: Raw input: {}", input);
     }
 
     // Tokenize
-    let tokens = lexer::tokenize(input).map_err(|e| CalcError::Tokenize(e.to_string()))?;
+    let tokens = lexer::tokenize(input)?;
     if is_debug {
         println!("[DEBUG]: Tokens: {:?}", tokens);
     }
 
     // Parse into AST
     let mut parser = parser::Parser::new(tokens);
-    let ast = parser
-        .parse()
-        .map_err(|e| CalcError::Parse(e.to_string()))?;
+    let ast = parser.parse()?;
     if is_debug {
-        println!("[DEBUG]: Raw AST: {:?}", ast);
-        println!("[DEBUG]: Pretty AST: {}", ast);
+        println!("[DEBUG]: Abstract Syntax Tree:\n {}", ast);
     }
 
     // Evaluate AST
-    let result = evaluator::eval(&ast).map_err(|e| CalcError::Evaluate(e.to_string()))?;
+    let result = evaluator::eval(&ast)?;
 
     Ok(result)
 }
