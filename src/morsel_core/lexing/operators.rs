@@ -38,6 +38,7 @@ pub enum OperatorType {
     Comma,     // ,
     Assign,    // =
     Semicolon, // ;
+    Colon,     // :
 
     #[default]
     Unknown,
@@ -86,6 +87,7 @@ impl fmt::Display for OperatorType {
             OperatorType::Comma => write!(f, ","),
             OperatorType::Assign => write!(f, "="),
             OperatorType::Semicolon => write!(f, ";"),
+            OperatorType::Colon => write!(f, ":"),
 
             OperatorType::Unknown => write!(f, "?"),
         }

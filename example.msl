@@ -1,30 +1,54 @@
-// This is an example of Morsel program
+// Example Morsel Program
+// To execute use ./Morsel example.msl
+// Or ./Morsel and "file example.msl"
 
-// Calculate area of the circle
-let r = 5;
-let area = pi * r^2;
-print(round(area));
+println("== Variables ==")
 
-// Calculate cos of the angle
-let angle = 180 * pi;
-print(cos(angle));
+// Declare a variable with explicit type
+let hello_world: string = "Hello world!";
+println(hello_world);
 
-// Exponentiation operations
-print(2 ^ 8);
-print(log(2, 256));
+let a: int = 10;
+println("a:", a);
 
-// Roots
-print(cbrt(27));
-print(sqrt(16));
-print(root(4, 8));
+// You can omit type if you provide a literal initializer
+let b = 10;           // int
+let pi_approx = 3.14; // float
+let name = "Morsel";  // string
+let active = true;    // bool
 
-// Max and min values
-print(max(10, 25, 5, 30, 15));
-print(min(10, 25, 5, 30, 15));
+println("b:", b);
+println("pi_approx:", pi_approx);
+println("name: ", name);
+println("active: ", active);
 
-// Some complex expression
-print(
-    abs(
-        (10 + 3) * sin(10) - log(2, 3)
-    )
-);
+
+println("== Mutability ==")
+
+// Variables are immutable by default
+let c: int = 5;
+// c = 10;  // Error
+
+// Use "mut" to allow reassignment
+let mut d = 5;
+d = 15;
+println("d:", d);
+
+
+println("== Arithmetic ==")
+
+let x = 10;
+let y = 3;
+
+println("x + y:", x + y);      // 13
+println("x * y:", x * y);      // 30
+println("x / y:", x / y);      // 3.33...
+println("x ^ y:", a ^ y);      // 1000 (power)
+
+
+println("== Some other math functions ==")
+
+println("max(10, 25):", max(10, 25));
+println("abs(-42):", abs(-42));
+println("sqrt(16.0):", sqrt(16.0));
+println("sin(0.5):", sin(0.5));

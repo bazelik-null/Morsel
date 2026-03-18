@@ -49,7 +49,7 @@ fn test_division() {
 
 #[test]
 fn test_division_by_zero() {
-    assert!(calculate_with_result("5 / 0", false).unwrap().is_infinite());
+    assert!(calculate_with_result("5 / 0", false).is_err());
 }
 
 #[test]
@@ -67,7 +67,7 @@ fn test_exponent() {
     assert_eq!(calculate_with_result("2 ^ 3", false), Ok(8.0));
     assert_eq!(calculate_with_result("5 ^ 2", false), Ok(25.0));
     assert_eq!(calculate_with_result("10 ^ 0", false), Ok(1.0));
-    assert_eq!(calculate_with_result("2 ^ -1", false), Ok(0.5));
+    assert_eq!(calculate_with_result("2.0 ^ -1", false), Ok(0.5));
 }
 
 #[test]
@@ -246,20 +246,43 @@ fn test_complex_expressions() {
 #[test]
 fn test_variables() {
     assert_eq!(
-        calculate_with_result("let x = 1; let y = 2; x = x + y; x", false),
+        calculate_with_result(
+            "let mut x = 1; \
+        let y = 2; \
+        x = x + y; \
+        x",
+            false
+        ),
         Ok(3.0)
     );
     assert_eq!(
-        calculate_with_result("let y = 2; let x = y * 5; x", false),
+        calculate_with_result(
+            "\
+        let y = 2; \
+        let x: int = y * 5; \
+        x",
+            false
+        ),
         Ok(10.0)
     );
     assert_approx_eq(
-        calculate_with_result("let y = pi; let x = sin(y); x", false).unwrap(),
+        calculate_with_result(
+            "let y = pi; \
+        let x: float = sin(y); \
+        x",
+            false,
+        )
+        .unwrap(),
         0.0,
         0.0001,
     );
     assert_eq!(
-        calculate_with_result("let y = 4; let x = sqrt(y) * 2^2; x", false),
+        calculate_with_result(
+            "let y = 4; \
+        let x: float = sqrt(y) * 2^2; \
+        x",
+            false
+        ),
         Ok(8.0)
     );
 }

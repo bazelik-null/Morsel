@@ -2,6 +2,7 @@
 
 use crate::morsel_core::evaluating::evaluator::Evaluator;
 use crate::morsel_core::evaluating::functions::FunctionTable;
+use crate::morsel_core::evaluating::variable::Value;
 use crate::morsel_core::lexing::lexer::Lexer;
 use crate::morsel_core::lexing::token::Token;
 use crate::morsel_core::parsing::node::Node;
@@ -45,7 +46,7 @@ impl Interpreter {
     }
 
     /// Execute expression
-    pub fn execute_with_result(&self, input: &str) -> Result<f64, String> {
+    pub fn execute_with_result(&self, input: &str) -> Result<Value, String> {
         if self.debug {
             println!("[DEBUG]: Raw input: {}", input);
         }
@@ -86,7 +87,7 @@ impl Interpreter {
     }
 
     /// Evaluate an AST node and return result
-    fn evaluate_with_result(&self, ast: &Node) -> Result<f64, String> {
+    fn evaluate_with_result(&self, ast: &Node) -> Result<Value, String> {
         let mut evaluator = Evaluator::new(self.func_table.clone());
         evaluator.eval(ast)
     }

@@ -1,7 +1,8 @@
 // Copyright (c) 2026 bazelik-null
 
+use crate::morsel_core::evaluating::variable::{Type, Value};
 use crate::morsel_core::lexing::operators::{OperatorType, Precedence};
-use crate::morsel_core::lexing::token::Token;
+use crate::morsel_core::lexing::token::{LiteralValue, Token};
 use crate::morsel_core::parsing::node::Node;
 
 pub struct Parser {
@@ -46,24 +47,68 @@ impl Parser {
         Ok(node)
     }
 
-    /// Parse let binding
+    /// Parse let binding with optional type annotation and type inference
     fn parse_let_binding(&mut self) -> Result<Node, String> {
         self.advance(); // consume 'let'
 
+        // Check for mutability
+        let mutability = if self.peek_keyword("mut") {
+            self.advance();
+            true
+        } else {
+            false
+        };
+
+        // Get variable name
         let name = match self.peek() {
             Some(Token::Identifier(n)) => {
                 let name = n.clone();
                 self.advance();
                 name
             }
-            _ => return Err(format!("Expected identifier after 'let' at {}", self.pos)),
+            _ => {
+                return Err(format!("Expected identifier after 'let' at {}", self.pos));
+            }
+        };
+
+        // Try to parse explicit type annotation (only if colon is present)
+        let type_annotation = if self.peek_operator() == Some(OperatorType::Colon) {
+            self.advance(); // consume ':'
+
+            match self.peek() {
+                Some(Token::Type(n)) => {
+                    let type_annotation = n.clone().parse::<Type>()?;
+                    self.advance();
+                    Some(type_annotation)
+                }
+                _ => {
+                    return Err(format!(
+                        "Expected type after ':' in 'let {}' at {}",
+                        name, self.pos
+                    ));
+                }
+            }
+        } else {
+            // No colon, so no explicit type annotation
+            None
         };
 
         self.expect_operator(OperatorType::Assign)?;
         let value = Box::new(self.parse_expression()?);
 
+        // If no explicit type, infer from the value
+        let final_type_annotation = match type_annotation {
+            Some(t) => Some(t),
+            None => self.infer_type_from_node(&value)?,
+        };
+
         // Build node
-        Ok(Node::Let { name, value })
+        Ok(Node::Statement {
+            name,
+            mutability,
+            value,
+            type_annotation: final_type_annotation,
+        })
     }
 
     /// Parse assignments
@@ -83,7 +128,7 @@ impl Parser {
         let value = Box::new(self.parse_expression()?);
 
         // Build node
-        Ok(Node::Let { name, value })
+        Ok(Node::Assignment { name, value })
     }
 
     /// Check if current position is an assignment (identifier followed by =)
@@ -203,20 +248,23 @@ impl Parser {
     /// Parse atomic expression: number, variable, or parenthesized expression
     fn parse_atom(&mut self) -> Result<Node, String> {
         match self.peek() {
-            // Parse number
-            Some(Token::Number(value)) => {
-                let value = *value;
+            // Parse literal
+            Some(Token::Literal(value)) => {
+                let value_node = match value {
+                    LiteralValue::Integer(value) => Node::Literal(Value::Integer(*value)),
+                    LiteralValue::Float(value) => Node::Literal(Value::Float(*value)),
+                    LiteralValue::String(value) => Node::Literal(Value::String(value.clone())),
+                    LiteralValue::Boolean(value) => Node::Literal(Value::Boolean(*value)),
+                };
 
                 self.advance();
-
-                Ok(Node::Literal(value))
+                Ok(value_node)
             }
+
             // Parse variable reference
             Some(Token::Identifier(name)) => {
                 let name = name.clone();
-
                 self.advance();
-
                 Ok(Node::Variable(name))
             }
 
@@ -234,6 +282,39 @@ impl Parser {
             }
 
             _ => self.error_unexpected_token(),
+        }
+    }
+
+    /// Infer type from a node. Returns error if type cannot be inferred.
+    fn infer_type_from_node(&self, node: &Node) -> Result<Option<Type>, String> {
+        match node {
+            Node::Literal(val) => match val {
+                Value::Integer(_) => Ok(Some(Type::Integer)),
+                Value::Float(_) => Ok(Some(Type::Float)),
+                Value::String(_) => Ok(Some(Type::String)),
+                Value::Boolean(_) => Ok(Some(Type::Boolean)),
+                Value::Null => Ok(None),
+            },
+            Node::Variable(_) => Err(format!(
+                "Cannot infer type from variable reference. Please provide explicit type annotation at {}.",
+                self.pos
+            )),
+            Node::Call { name, args: _args } => Err(format!(
+                "Cannot infer type from expression '{}'. Please provide explicit type annotation at {}.",
+                name, self.pos
+            )),
+            Node::Statement { .. } => Err(format!(
+                "Cannot infer type from nested statement. Please provide explicit type annotation at {}.",
+                self.pos
+            )),
+            Node::Assignment { .. } => Err(format!(
+                "Cannot infer type from assignment. Please provide explicit type annotation at {}.",
+                self.pos
+            )),
+            Node::Block(_) => Err(format!(
+                "Cannot infer type from block. Please provide explicit type annotation at {}.",
+                self.pos
+            )),
         }
     }
 

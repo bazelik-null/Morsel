@@ -1,11 +1,13 @@
 // Copyright (c) 2026 bazelik-null
 
+use crate::morsel_core::evaluating::variable::{Type, Value};
 use std::fmt;
 
 #[derive(Debug, Clone)]
 pub enum Node {
-    // Literals and references
-    Literal(f64),
+    // Literals
+    Literal(Value),
+    // Variable references
     Variable(String),
 
     // Operations (unary, binary, functions)
@@ -14,8 +16,16 @@ pub enum Node {
         args: Vec<Node>, // [left, right] for binary, [child] for unary
     },
 
-    // Statements
-    Let {
+    // Statements (let)
+    Statement {
+        name: String,
+        mutability: bool,
+        value: Box<Node>,
+        type_annotation: Option<Type>,
+    },
+
+    // Assignment (x = y)
+    Assignment {
         name: String,
         value: Box<Node>,
     },
@@ -26,66 +36,25 @@ pub enum Node {
 
 impl fmt::Display for Node {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let ascii_tree = self.tree_string_internal("", true);
-        write!(f, "{}", ascii_tree)
+        write!(f, "{}", self.tree_string())
     }
 }
 
 impl Node {
-    fn tree_string_internal(&self, prefix: &str, is_last: bool) -> String {
-        let mut result = String::new();
-
-        // Add the current node's connector and content
-        let connector = if is_last { "└── " } else { "├── " };
-        result.push_str(prefix);
-        result.push_str(connector);
-
+    /// Get the inferred type of this node
+    fn inferred_type(&self) -> Type {
         match self {
-            Node::Block(statements) => {
-                result.push_str("Block\n");
-
-                let extension = if is_last { "    " } else { "│   " };
-                let child_prefix = format!("{}{}", prefix, extension);
-
-                // Display all statements
-                for (i, stmt) in statements.iter().enumerate() {
-                    let is_last_stmt = i == statements.len() - 1;
-                    result.push_str(&stmt.tree_string_internal(&child_prefix, is_last_stmt));
-                }
-            }
-
-            Node::Literal(n) => {
-                result.push_str(&format!("Literal({})\n", n));
-            }
-
-            Node::Variable(name) => {
-                result.push_str(&format!("Variable(\"{}\")\n", name));
-            }
-
-            Node::Let { name, value } => {
-                result.push_str(&format!("Let(\"{}\")\n", name));
-
-                let extension = if is_last { "    " } else { "│   " };
-                let child_prefix = format!("{}{}", prefix, extension);
-
-                result.push_str(&value.tree_string_internal(&child_prefix, true));
-            }
-
-            Node::Call { name, args } => {
-                result.push_str(&format!("Call(\"{}\")\n", name));
-
-                let extension = if is_last { "    " } else { "│   " };
-                let child_prefix = format!("{}{}", prefix, extension);
-
-                // Display all arguments
-                for (i, arg) in args.iter().enumerate() {
-                    let is_last_arg = i == args.len() - 1;
-                    result.push_str(&arg.tree_string_internal(&child_prefix, is_last_arg));
-                }
-            }
+            Node::Literal(value) => value_to_type(value),
+            Node::Variable(_) => Type::Any,
+            Node::Block(_) => Type::Null,
+            Node::Statement {
+                type_annotation,
+                value,
+                ..
+            } => type_annotation.unwrap_or_else(|| value.inferred_type()),
+            Node::Assignment { value, .. } => value.inferred_type(),
+            Node::Call { .. } => Type::Any,
         }
-
-        result
     }
 
     /// Get the string representation of a node type for debugging
@@ -94,12 +63,13 @@ impl Node {
             Node::Block(_) => "Block",
             Node::Literal(_) => "Literal",
             Node::Variable(_) => "Variable",
-            Node::Let { .. } => "Let",
+            Node::Statement { .. } => "Let",
+            Node::Assignment { .. } => "Assign",
             Node::Call { .. } => "Call",
         }
     }
 
-    /// Check if this node is an atom node (no children)
+    /// Check if this node is an atom node
     pub fn is_atom(&self) -> bool {
         matches!(self, Node::Literal(_) | Node::Variable(_))
     }
@@ -109,7 +79,8 @@ impl Node {
         match self {
             Node::Block(statements) => statements.iter().collect(),
             Node::Literal(_) | Node::Variable(_) => vec![],
-            Node::Let { value, .. } => vec![value.as_ref()],
+            Node::Statement { value, .. } => vec![value.as_ref()],
+            Node::Assignment { value, .. } => vec![value.as_ref()],
             Node::Call { args, .. } => args.iter().collect(),
         }
     }
@@ -119,25 +90,20 @@ impl Node {
         match self {
             Node::Block(statements) => statements.iter_mut().collect(),
             Node::Literal(_) | Node::Variable(_) => vec![],
-            Node::Let { value, .. } => vec![value.as_mut()],
+            Node::Statement { value, .. } => vec![value.as_mut()],
+            Node::Assignment { value, .. } => vec![value.as_mut()],
             Node::Call { args, .. } => args.iter_mut().collect(),
         }
     }
 
     /// Calculate the depth of the tree
     pub fn depth(&self) -> usize {
-        match self {
-            Node::Block(statements) => {
-                1 + statements
-                    .iter()
-                    .map(|stmt| stmt.depth())
-                    .max()
-                    .unwrap_or(0)
-            }
-            Node::Literal(_) | Node::Variable(_) => 0,
-            Node::Let { value, .. } => 1 + value.depth(),
-            Node::Call { args, .. } => 1 + args.iter().map(|arg| arg.depth()).max().unwrap_or(0),
-        }
+        self.children()
+            .iter()
+            .map(|child| child.depth())
+            .max()
+            .unwrap_or(0)
+            + (if self.is_atom() { 0 } else { 1 })
     }
 
     /// Count the total number of nodes in the tree
@@ -151,6 +117,109 @@ impl Node {
 
     /// Get a human-readable tree representation
     pub fn tree_string(&self) -> String {
-        self.tree_string_internal("", true)
+        self.format_tree("", true)
+    }
+
+    /// Get type information for a node
+    pub fn type_info(&self) -> TypeInfo {
+        TypeInfo {
+            node_type: self.node_type().to_string(),
+            inferred_type: self.inferred_type(),
+            is_leaf: self.is_atom(),
+            child_count: self.children().len(),
+        }
+    }
+
+    /// Format a single node line with type annotation
+    fn format_node_line(&self) -> String {
+        match self {
+            Node::Block(_) => {
+                format!("Block [{}]", self.inferred_type())
+            }
+            Node::Literal(value) => {
+                format!("Literal({}) [{}]", value, self.inferred_type())
+            }
+            Node::Variable(name) => {
+                format!("Variable(\"{}\") [{}]", name, self.inferred_type())
+            }
+            Node::Statement {
+                name,
+                mutability,
+                type_annotation,
+                ..
+            } => {
+                let type_display = match type_annotation {
+                    Some(ty) => {
+                        if *mutability {
+                            format!("[mut {}]", ty)
+                        } else {
+                            format!("[{}]", ty)
+                        }
+                    }
+                    None => {
+                        if *mutability {
+                            "[mut inferred]".to_string()
+                        } else {
+                            "[inferred]".to_string()
+                        }
+                    }
+                };
+                format!("Let(\"{}\") {}", name, type_display)
+            }
+            Node::Assignment { name, value } => {
+                format!("Assign(\"{}\") [{}]", name, value.inferred_type())
+            }
+            Node::Call { name, .. } => {
+                format!("Call(\"{}\") [{}]", name, self.inferred_type())
+            }
+        }
+    }
+
+    /// Recursively format the tree with proper indentation
+    fn format_tree(&self, prefix: &str, is_last: bool) -> String {
+        let connector = if is_last { "└── " } else { "├── " };
+        let mut result = format!("{}{}{}\n", prefix, connector, self.format_node_line());
+
+        let children = self.children();
+        if !children.is_empty() {
+            let extension = if is_last { "    " } else { "│   " };
+            let child_prefix = format!("{}{}", prefix, extension);
+
+            for (i, child) in children.iter().enumerate() {
+                result.push_str(&child.format_tree(&child_prefix, i == children.len() - 1));
+            }
+        }
+
+        result
+    }
+}
+
+/// Struct for detailed type information
+#[derive(Debug, Clone)]
+pub struct TypeInfo {
+    pub node_type: String,
+    pub inferred_type: Type,
+    pub is_leaf: bool,
+    pub child_count: usize,
+}
+
+impl fmt::Display for TypeInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{} [{}] (leaf: {}, children: {})",
+            self.node_type, self.inferred_type, self.is_leaf, self.child_count
+        )
+    }
+}
+
+/// Convert a Value to its corresponding Type
+fn value_to_type(value: &Value) -> Type {
+    match value {
+        Value::Integer(_) => Type::Integer,
+        Value::Float(_) => Type::Float,
+        Value::String(_) => Type::String,
+        Value::Boolean(_) => Type::Boolean,
+        Value::Null => Type::Null,
     }
 }

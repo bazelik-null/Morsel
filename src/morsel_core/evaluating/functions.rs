@@ -3,14 +3,6 @@
 use crate::morsel_core::parsing::node::Node;
 use std::collections::HashMap;
 
-#[derive(Clone, Debug, Default)]
-pub enum ReturnType {
-    Value(f64),
-
-    #[default]
-    Void,
-}
-
 pub struct FunctionTable {
     functions: HashMap<String, FunctionInfo>,
 }
@@ -163,7 +155,7 @@ fn init_builtins() -> HashMap<String, FunctionInfo> {
         ("min", 1, None),
         ("max", 1, None),
         // I/O functions
-        ("print", 1, None),
+        ("println", 1, None),
     ]
     .into_iter()
     .map(|(name, min, max)| {
