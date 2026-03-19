@@ -4,8 +4,8 @@
 pub enum Command {
     Debug,
     File(String),
+    Edit,
     Help,
-    Func,
     Exit,
     Unknown,
 }
@@ -23,8 +23,8 @@ impl Command {
                     Command::Unknown
                 }
             }
+            Some("edit") => Command::Edit,
             Some("help") => Command::Help,
-            Some("func") => Command::Func,
             Some("exit") => Command::Exit,
             _ => Command::Unknown,
         }

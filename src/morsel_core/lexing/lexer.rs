@@ -3,13 +3,7 @@
 use crate::morsel_core::evaluating::functions::FunctionTable;
 use crate::morsel_core::lexing::operators::OperatorType;
 use crate::morsel_core::lexing::token::{LiteralValue, Token};
-use once_cell::sync::Lazy;
-use regex::Regex;
 use std::sync::Arc;
-
-static TOKENIZER_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"("(?:\\.|[^"\\])*"|\d+\.\d+|\d+|[a-zA-Z_]+|[+\-*/()=^%,;:])"#).unwrap()
-});
 
 static RESERVED_KEYWORDS: &[&str] = &["let", "mut", "if", "else", "fn", "for", "while"];
 static RESERVED_TYPES: &[&str] = &["float", "int", "string", "bool", "null"];
@@ -32,9 +26,40 @@ impl Lexer {
 
         let input = self.strip_comments(input);
         let mut tokens = Vec::new();
+        let mut chars = input.chars().peekable();
 
-        for m in TOKENIZER_REGEX.find_iter(&input) {
-            tokens.push(self.parse_token(m.as_str(), &tokens)?);
+        while let Some(&ch) = chars.peek() {
+            match ch {
+                // Skip whitespace
+                ' ' | '\t' | '\n' | '\r' => {
+                    chars.next();
+                }
+                // String literals
+                '"' => {
+                    chars.next();
+                    let string = self.parse_string(&mut chars)?;
+                    tokens.push(Token::Literal(LiteralValue::String(string)));
+                }
+                // Numbers
+                '0'..='9' => {
+                    let number = self.parse_number(&mut chars);
+                    tokens.push(number);
+                }
+                // Identifiers, keywords, functions, types
+                'a'..='z' | 'A'..='Z' | '_' => {
+                    let ident = self.parse_identifier(&mut chars);
+                    tokens.push(self.classify_identifier(&ident));
+                }
+                // Operators and punctuation
+                '+' | '-' | '*' | '/' | '%' | '^' | '(' | ')' | ',' | '=' | ';' | ':' => {
+                    chars.next();
+                    let op = self.parse_operator(ch, &tokens)?;
+                    tokens.push(Token::Operator(op));
+                }
+                _ => {
+                    return Err(format!("Unexpected character: '{}'", ch));
+                }
+            }
         }
 
         Ok(tokens)
@@ -56,56 +81,28 @@ impl Lexer {
             .join(" ")
     }
 
-    /// Parse a single lexeme into a token
-    fn parse_token(&self, lexeme: &str, preceding_tokens: &[Token]) -> Result<Token, String> {
-        // Try to parse as boolean
-        if let Some(value) = self.parse_boolean(lexeme) {
-            return Ok(Token::Literal(LiteralValue::Boolean(value)));
+    fn classify_identifier(&self, ident: &str) -> Token {
+        if let Some(value) = self.parse_boolean(ident) {
+            return Token::Literal(LiteralValue::Boolean(value));
         }
 
-        // Try to parse as string
-        if lexeme.starts_with('"') && lexeme.ends_with('"') {
-            let string_value = self.parse_string(lexeme)?;
-            return Ok(Token::Literal(LiteralValue::String(string_value)));
+        if let Some(value) = self.parse_constant(ident) {
+            return Token::Literal(LiteralValue::Float(value));
         }
 
-        // Try to parse as int
-        if let Ok(value) = lexeme.parse::<i64>() {
-            return Ok(Token::Literal(LiteralValue::Integer(value)));
+        if RESERVED_KEYWORDS.contains(&ident) {
+            return Token::Keyword(ident.to_string());
         }
 
-        // Try to parse as float
-        if let Ok(value) = lexeme.parse::<f64>() {
-            return Ok(Token::Literal(LiteralValue::Float(value)));
+        if RESERVED_TYPES.contains(&ident) {
+            return Token::Type(ident.to_string());
         }
 
-        // Try to parse as constant
-        if let Some(value) = self.parse_constant(lexeme) {
-            return Ok(Token::Literal(LiteralValue::Float(value)));
+        if self.func_table.is_function(ident) {
+            return Token::Function(ident.to_string());
         }
 
-        // Try to parse as operator
-        if let Some(op) = self.parse_operator(lexeme, preceding_tokens) {
-            return Ok(Token::Operator(op));
-        }
-
-        // Try to parse as keyword
-        if RESERVED_KEYWORDS.contains(&lexeme) {
-            return Ok(Token::Keyword(lexeme.to_string()));
-        }
-
-        // Try to parse as type
-        if RESERVED_TYPES.contains(&lexeme) {
-            return Ok(Token::Type(lexeme.to_string()));
-        }
-
-        // Try to parse as function
-        if self.func_table.is_function(lexeme) {
-            return Ok(Token::Function(lexeme.to_string()));
-        }
-
-        // Parse as variable reference
-        Ok(Token::Identifier(lexeme.to_string()))
+        Token::Identifier(ident.to_string())
     }
 
     /// Parse constants
@@ -117,34 +114,6 @@ impl Lexer {
         }
     }
 
-    /// Parse operators
-    fn parse_operator(&self, lexeme: &str, preceding_tokens: &[Token]) -> Option<OperatorType> {
-        let op = match lexeme {
-            "+" => OperatorType::Add,
-            "-" => OperatorType::Subtract,
-            "*" => OperatorType::Multiply,
-            "/" => OperatorType::Divide,
-            "%" => OperatorType::Modulo,
-            "^" => OperatorType::Exponent,
-            "(" => OperatorType::LParen,
-            ")" => OperatorType::RParen,
-            "," => OperatorType::Comma,
-            "=" => OperatorType::Assign,
-            ";" => OperatorType::Semicolon,
-            ":" => OperatorType::Colon,
-            _ => return None,
-        };
-
-        // Convert binary minus to unary negate when needed
-        let final_op = if op == OperatorType::Subtract && self.should_be_unary(preceding_tokens) {
-            OperatorType::Negate
-        } else {
-            op
-        };
-
-        Some(final_op)
-    }
-
     /// Parse boolean literals
     fn parse_boolean(&self, lexeme: &str) -> Option<bool> {
         match lexeme {
@@ -154,21 +123,111 @@ impl Lexer {
         }
     }
 
-    /// Parse string literals (removes quotes and handles escape sequences)
-    fn parse_string(&self, lexeme: &str) -> Result<String, String> {
-        if !lexeme.starts_with('"') || !lexeme.ends_with('"') {
-            return Err(format!("Invalid string literal: {}", lexeme));
+    /// Parse variable names
+    fn parse_identifier(&self, chars: &mut std::iter::Peekable<std::str::Chars>) -> String {
+        let mut ident = String::new();
+
+        while let Some(&ch) = chars.peek() {
+            match ch {
+                'a'..='z' | 'A'..='Z' | '0'..='9' | '_' => {
+                    ident.push(ch);
+                    chars.next();
+                }
+                _ => break,
+            }
         }
 
-        let content = &lexeme[1..lexeme.len() - 1];
-        let unescaped = content
-            .replace("\\n", "\n")
-            .replace("\\t", "\t")
-            .replace("\\r", "\r")
-            .replace("\\\"", "\"")
-            .replace("\\\\", "\\");
+        ident
+    }
 
-        Ok(unescaped)
+    /// Parse string literals (removes quotes and handles escape sequences)
+    fn parse_string(
+        &self,
+        chars: &mut std::iter::Peekable<std::str::Chars>,
+    ) -> Result<String, String> {
+        let mut result = String::new();
+        let mut escaped = false;
+
+        while let Some(&ch) = chars.peek() {
+            chars.next();
+
+            if escaped {
+                match ch {
+                    'n' => result.push('\n'),
+                    't' => result.push('\t'),
+                    'r' => result.push('\r'),
+                    '"' => result.push('"'),
+                    '\\' => result.push('\\'),
+                    _ => {
+                        result.push('\\');
+                        result.push(ch);
+                    }
+                }
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                return Ok(result);
+            } else {
+                result.push(ch);
+            }
+        }
+
+        Err("Unterminated string literal".to_string())
+    }
+
+    /// Parse numbers
+    fn parse_number(&self, chars: &mut std::iter::Peekable<std::str::Chars>) -> Token {
+        let mut number = String::new();
+        let mut is_float = false;
+
+        while let Some(&ch) = chars.peek() {
+            match ch {
+                '0'..='9' => {
+                    number.push(ch);
+                    chars.next();
+                }
+                '.' if !is_float && chars.clone().nth(1).is_some_and(|c| c.is_ascii_digit()) => {
+                    is_float = true;
+                    number.push(ch);
+                    chars.next();
+                }
+                _ => break,
+            }
+        }
+
+        if is_float {
+            Token::Literal(LiteralValue::Float(number.parse().unwrap()))
+        } else {
+            Token::Literal(LiteralValue::Integer(number.parse().unwrap()))
+        }
+    }
+
+    /// Parse operators
+    fn parse_operator(&self, ch: char, preceding_tokens: &[Token]) -> Result<OperatorType, String> {
+        let op = match ch {
+            '+' => OperatorType::Add,
+            '-' => OperatorType::Subtract,
+            '*' => OperatorType::Multiply,
+            '/' => OperatorType::Divide,
+            '%' => OperatorType::Modulo,
+            '^' => OperatorType::Exponent,
+            '(' => OperatorType::LParen,
+            ')' => OperatorType::RParen,
+            ',' => OperatorType::Comma,
+            '=' => OperatorType::Assign,
+            ';' => OperatorType::Semicolon,
+            ':' => OperatorType::Colon,
+            _ => return Err(format!("Unknown operator: {}", ch)),
+        };
+
+        let final_op = if op == OperatorType::Subtract && self.should_be_unary(preceding_tokens) {
+            OperatorType::Negate
+        } else {
+            op
+        };
+
+        Ok(final_op)
     }
 
     /// Determine if a minus operator should be treated as unary negation

@@ -219,13 +219,20 @@ impl Evaluator {
             "max" => self.apply_minmax(args, true),
             "min" => self.apply_minmax(args, false),
 
-            "println" => {
+            "println" | "print" => {
                 let output = args
                     .iter()
                     .map(|v| v.display())
                     .collect::<Vec<_>>()
                     .join(" ");
-                println!("{}", output);
+
+                if func == "println" {
+                    println!("{}", output);
+                } else {
+                    // TODO: Output is not written so i changed it to println
+                    println!("{}", output);
+                }
+
                 Ok(Value::Null)
             }
 

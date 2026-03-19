@@ -1,46 +1,127 @@
 // Copyright (c) 2026 bazelik-null
 
 use crate::cli::app_state::AppState;
-use crate::cli::backend::{calculate_with_result, eval_file};
+use crate::cli::backend::{cli_execute_with_result, eval_file};
 use crate::cli::cmd::Command;
+use std::io::Write;
 
-use std::io::{self, Write};
+use rustyline::DefaultEditor;
+use rustyline::error::ReadlineError;
+
+const HISTORY_FILE: &str = ".morsel_history";
+const PROMPT: &str = ">>> ";
+const EDIT_PROMPT: &str = "... ";
 
 pub fn cli_init() {
     print_banner();
-    let mut state = AppState::default();
-    let mut input_buffer = String::new();
 
+    let mut editor = match DefaultEditor::new() {
+        Ok(ed) => ed,
+        Err(e) => {
+            eprintln!("[ERROR]: Failed to initialize editor: {}", e);
+            return;
+        }
+    };
+
+    let mut state = AppState::default();
+
+    // Main REPL loop
     loop {
-        if !handle_input_cycle(&mut state, &mut input_buffer) {
-            break;
+        match editor.readline(PROMPT) {
+            Ok(line) => {
+                let trimmed = line.trim();
+
+                // Skip empty lines
+                if trimmed.is_empty() {
+                    continue;
+                }
+
+                // Add to history
+                if let Err(e) = editor.add_history_entry(trimmed) {
+                    eprintln!("[WARN]: Failed to add history entry: {}", e);
+                }
+
+                // Process input
+                if !handle_command(&mut state, trimmed, &mut editor) {
+                    break;
+                }
+            }
+            Err(ReadlineError::Interrupted) => {
+                println!("\n[INFO]: Exiting...");
+                break;
+            }
+            Err(ReadlineError::Eof) => {
+                println!("\n[INFO]: Exiting...");
+                break;
+            }
+            Err(e) => {
+                eprintln!("[ERROR]: {}", e);
+                break;
+            }
         }
     }
 
-    println!("[INFO]: Exiting...");
+    // Save history before exiting
+    if let Err(e) = editor.save_history(HISTORY_FILE) {
+        eprintln!("[WARN]: Failed to save history: {}", e);
+    }
 }
 
-// Input handling
+fn multiline_editor(editor: &mut DefaultEditor, is_debug: bool) {
+    let mut buffer = String::new();
+    println!("[INFO]: Entering edit mode. Type 'edit' on a new line to finish.\n");
 
-fn handle_input_cycle(state: &mut AppState, input_buffer: &mut String) -> bool {
-    print_prompt();
+    loop {
+        match editor.readline(EDIT_PROMPT) {
+            Ok(line) => {
+                let trimmed = line.trim();
 
-    input_buffer.clear();
-    if let Err(e) = io::stdin().read_line(input_buffer) {
-        eprintln!("[ERROR]: {}", e);
-        return true; // Continue on IO error
+                // Check for exit command
+                if trimmed == "edit" {
+                    println!("[INFO]: Exiting edit mode.\n");
+                    break;
+                }
+
+                // Add line to buffer
+                if !buffer.is_empty() {
+                    buffer.push('\n');
+                }
+                buffer.push_str(&line);
+
+                // Add to history
+                if let Err(e) = editor.add_history_entry(trimmed) {
+                    eprintln!("[WARN]: Failed to add history entry: {}", e);
+                }
+            }
+            Err(ReadlineError::Interrupted) => {
+                println!("\n[INFO]: Edit cancelled.");
+                return;
+            }
+            Err(ReadlineError::Eof) => {
+                println!("\n[INFO]: EOF reached. Exiting edit mode.\n");
+                break;
+            }
+            Err(e) => {
+                eprintln!("[ERROR]: {}", e);
+                return;
+            }
+        }
     }
 
-    let trimmed = input_buffer.trim();
-
-    // Skip empty lines
-    if trimmed.is_empty() {
-        return true;
+    if buffer.is_empty() {
+        return;
     }
 
-    // Check for commands
-    match Command::from_input(trimmed) {
-        Command::Exit => return false,
+    execute_expression(&buffer, is_debug);
+}
+
+// Command Processing
+
+fn handle_command(state: &mut AppState, input: &str, editor: &mut DefaultEditor) -> bool {
+    match Command::from_input(input) {
+        Command::Exit => {
+            return false;
+        }
         Command::Debug => {
             state.toggle_debug();
             return true;
@@ -49,27 +130,47 @@ fn handle_input_cycle(state: &mut AppState, input_buffer: &mut String) -> bool {
             print_help();
             return true;
         }
-        Command::Func => {
-            print_func();
-            return true;
-        }
         Command::File(file_path) => {
-            match eval_file(file_path.as_str(), state.is_debug) {
-                Ok(_) => {} // eval_file prints result.
-                Err(err) => eprintln!("[ERROR]: {}", err),
-            }
+            handle_file_command(file_path.as_str(), state.is_debug);
             return true;
         }
-        Command::Unknown => {} // Continue to calculation
+        Command::Edit => {
+            multiline_editor(editor, state.is_debug);
+            return true;
+        }
+        Command::Unknown => {
+            // Continue to evaluation
+        }
     }
 
-    // Calculate and display result
-    match calculate_with_result(trimmed, state.is_debug) {
-        Ok(result) => println!("{}", result),
-        Err(err) => eprintln!("[ERROR]: {}", err),
-    }
-
+    // Execute
+    execute_expression(input, state.is_debug);
     true
+}
+
+fn handle_file_command(file_path: &str, debug: bool) {
+    match eval_file(file_path, debug) {
+        Ok(_) => {
+            // eval_file prints result
+        }
+        Err(err) => {
+            eprintln!("[ERROR]: Failed to evaluate file '{}': {}", file_path, err);
+        }
+    }
+}
+
+fn execute_expression(input: &str, debug: bool) {
+    match cli_execute_with_result(input, debug) {
+        Ok(Some(result)) => {
+            println!("{}", result);
+        }
+        Ok(None) => {}
+        Err(err) => {
+            eprintln!("[ERROR]: {}", err);
+        }
+    }
+
+    let _ = std::io::stdout().flush();
 }
 
 // UI
@@ -81,52 +182,11 @@ fn print_banner() {
     println!();
 }
 
-fn print_prompt() {
-    print!(">>> ");
-    io::stdout().flush().expect("Failed to flush stdout");
-}
-
 fn print_help() {
-    println!("Available commands\n");
-    println!("  help     - Show this help message.");
-    println!("  func     - Show all math functions.");
-    println!("  file     - Evaluate passed file.");
-    println!("  debug    - Toggle debug mode.");
-    println!("  exit     - Exit.\n");
-
-    println!("Enter any mathematical expression to evaluate it.\n");
-}
-
-fn print_func() {
-    println!("Available Functions:\n");
-
-    println!("Arithmetic Operations:");
-    println!("  Addition:       x + y");
-    println!("  Subtraction:    x - y");
-    println!("  Multiplication: x * y");
-    println!("  Division:       x / y\n");
-
-    println!("Exponent and Logarithmic Operations:");
-    println!("  Exponentiation:    x ^ y");
-    println!("  Square root:       sqrt(x)");
-    println!("  Logarithm:         log(x, y) [where x is base, y is argument]");
-    println!("  Natural logarithm: ln(x)\n");
-
-    println!("Trigonometric Functions:");
-    println!("  Cosine:     cos(x)");
-    println!("  Sine:       sin(x)");
-    println!("  Tangent:    tan(x)");
-    println!("  Arccosine:  acos(x)");
-    println!("  Arcsine:    asin(x)");
-    println!("  Arctangent: atan(x)\n");
-
-    println!("Miscellaneous Operations:");
-    println!("  Negation:           -x");
-    println!("  Modulo (remainder): x % y");
-    println!("  Absolute value:     abs(x)");
-    println!("  Rounding:           round(x)");
-    println!("  Max value:          max(x, ...)");
-    println!("  Min value:          max(x, ...)\n");
-
-    println!("  Unknown: Default value [invalid]\n");
+    println!("== Available commands ==\n");
+    println!("  help       - Show this help message.");
+    println!("  file       - Execute a file.");
+    println!("  edit       - Start multiline editor.");
+    println!("  debug      - Toggle debug mode.");
+    println!("  exit       - Exit.\n");
 }
