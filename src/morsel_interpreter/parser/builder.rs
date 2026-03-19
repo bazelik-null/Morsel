@@ -1,41 +1,41 @@
 // Copyright (c) 2026 bazelik-null
 
-use crate::morsel_core::evaluating::variable::{Type, Value};
-use crate::morsel_core::lexing::operators::{OperatorType, Precedence};
-use crate::morsel_core::lexing::token::{LiteralValue, Token};
-use crate::morsel_core::parsing::node::Node;
+use crate::morsel_interpreter::environment::types::Type;
+use crate::morsel_interpreter::environment::variable::Value;
+use crate::morsel_interpreter::lexer::syntax_operator::{Precedence, SyntaxOperator};
+use crate::morsel_interpreter::lexer::token::{LiteralValue, Token};
+use crate::morsel_interpreter::parser::ast_node::Node;
 
-pub struct Parser {
+pub struct AstBuilder {
     tokens: Vec<Token>,
     pos: usize,
 }
 
-impl Parser {
+impl AstBuilder {
     pub fn new(tokens: Vec<Token>) -> Self {
         Self { tokens, pos: 0 }
     }
 
-    /// Entry point for parsing. Parses all statements and returns a single AST root.
+    /// Entry point for parser. Parses all statements and returns a single AST root.
+    /// Also parses functions.
     pub fn parse(&mut self) -> Result<Node, String> {
         let mut statements = Vec::new();
 
         // Parse all statements
-        while self.pos < self.tokens.len() {
+        while self.pos < self.tokens.len() && !self.peek_curly() {
             statements.push(self.parse_statement()?);
         }
 
-        // Build a single tree
-        Ok(match statements.len() {
-            0 => Node::Block(vec![]),
-            1 => statements.into_iter().next().unwrap(),
-            _ => Node::Block(statements),
-        })
+        // Wrap all statements into a root block
+        Ok(Node::Block(statements))
     }
 
     /// Parse a single statement (let binding, assignment, or expression).
     fn parse_statement(&mut self) -> Result<Node, String> {
         let node = if self.peek_keyword("let") {
             self.parse_let_binding()?
+        } else if self.peek_keyword("fn") {
+            self.parse_func_binding()?
         } else if self.is_assignment() {
             self.parse_assignment()?
         } else {
@@ -71,43 +71,59 @@ impl Parser {
             }
         };
 
-        // Try to parse explicit type annotation (only if colon is present)
-        let type_annotation = if self.peek_operator() == Some(OperatorType::Colon) {
-            self.advance(); // consume ':'
+        // Get type (if explicit)
+        let type_annotation = self.get_explicit_type(name.as_str())?;
 
-            match self.peek() {
-                Some(Token::Type(n)) => {
-                    let type_annotation = n.clone().parse::<Type>()?;
-                    self.advance();
-                    Some(type_annotation)
-                }
-                _ => {
-                    return Err(format!(
-                        "Expected type after ':' in 'let {}' at {}",
-                        name, self.pos
-                    ));
-                }
-            }
-        } else {
-            // No colon, so no explicit type annotation
-            None
-        };
-
-        self.expect_operator(OperatorType::Assign)?;
+        // Get assigment
+        self.expect_operator(SyntaxOperator::Assign)?;
         let value = Box::new(self.parse_expression()?);
 
         // If no explicit type, infer from the value
         let final_type_annotation = match type_annotation {
-            Some(t) => Some(t),
+            Some(t) => t,
             None => self.infer_type_from_node(&value)?,
         };
 
         // Build node
-        Ok(Node::Statement {
+        Ok(Node::LetBinding {
             name,
             mutability,
             value,
             type_annotation: final_type_annotation,
+        })
+    }
+
+    /// Parse function binding
+    fn parse_func_binding(&mut self) -> Result<Node, String> {
+        self.advance(); // consume 'fn'
+
+        // Get function name
+        let name = match self.peek() {
+            Some(Token::Identifier(n)) => {
+                let name = n.clone();
+                self.advance();
+                name
+            }
+            _ => {
+                return Err(format!("Expected identifier after 'fn' at {}", self.pos));
+            }
+        };
+
+        // Check for parenthesis and parse arguments inside them
+        self.expect_operator(SyntaxOperator::LParen)?;
+        let args = self.parse_func_arguments()?;
+        self.expect_operator(SyntaxOperator::RParen)?;
+
+        // Parse all statements inside
+        self.expect_operator(SyntaxOperator::CurlyLParen)?;
+        let implementation = Box::new(self.parse()?);
+        self.expect_operator(SyntaxOperator::CurlyRParen)?;
+
+        // Build node
+        Ok(Node::FuncBinding {
+            name,
+            args,
+            implementation,
         })
     }
 
@@ -124,7 +140,7 @@ impl Parser {
         };
 
         self.advance();
-        self.expect_operator(OperatorType::Assign)?;
+        self.expect_operator(SyntaxOperator::Assign)?;
         let value = Box::new(self.parse_expression()?);
 
         // Build node
@@ -135,7 +151,7 @@ impl Parser {
     fn is_assignment(&self) -> bool {
         matches!(self.peek(), Some(Token::Identifier(_)))
             && self.tokens.get(self.pos + 1).and_then(|t| t.as_operator())
-                == Some(&OperatorType::Assign)
+                == Some(&SyntaxOperator::Assign)
     }
 
     /// Parse an expression with operator precedence
@@ -182,12 +198,8 @@ impl Parser {
         Ok(left)
     }
 
-    /// Parse primary expression: function, unary operator, or atom
+    /// Parse primary expression: unary operator or atom
     fn parse_primary(&mut self) -> Result<Node, String> {
-        if let Some(func) = self.peek_function() {
-            return self.parse_function(func);
-        }
-
         if let Some(op) = self.peek_operator()
             && op.is_unary()
         {
@@ -197,29 +209,15 @@ impl Parser {
         self.parse_atom()
     }
 
-    /// Parse function call: name(arg1, arg2, ...)
-    fn parse_function(&mut self, func: String) -> Result<Node, String> {
-        // Consume function token
-        self.advance();
-
-        // Check for parenthesis and parse arguments inside them
-        self.expect_operator(OperatorType::LParen)?;
-        let args = self.parse_arguments()?;
-        self.expect_operator(OperatorType::RParen)?;
-
-        // Build node
-        Ok(Node::Call { name: func, args })
-    }
-
     /// Parse comma-separated argument list
     fn parse_arguments(&mut self) -> Result<Vec<Node>, String> {
-        if self.peek_operator() == Some(OperatorType::RParen) {
+        if self.peek_operator() == Some(SyntaxOperator::RParen) {
             return Ok(Vec::new());
         }
 
         let mut args = vec![self.parse_expression()?];
 
-        while self.peek_operator() == Some(OperatorType::Comma) {
+        while self.peek_operator() == Some(SyntaxOperator::Comma) {
             // Consume comma
             self.advance();
 
@@ -230,8 +228,59 @@ impl Parser {
         Ok(args)
     }
 
+    /// Parse comma-separated list of function parameters (without let keyword)
+    fn parse_func_arguments(&mut self) -> Result<Vec<Node>, String> {
+        if self.peek_operator() == Some(SyntaxOperator::RParen) {
+            return Ok(Vec::new());
+        }
+
+        let mut args = vec![self.parse_func_parameter()?];
+
+        while self.peek_operator() == Some(SyntaxOperator::Comma) {
+            // Consume comma
+            self.advance();
+
+            // Parse parameter
+            args.push(self.parse_func_parameter()?);
+        }
+
+        Ok(args)
+    }
+
+    /// Parse a single function parameter: 'name: type'
+    fn parse_func_parameter(&mut self) -> Result<Node, String> {
+        // Get parameter name
+        let name = match self.peek() {
+            Some(Token::Identifier(n)) => {
+                let name = n.clone();
+                self.advance();
+                name
+            }
+            _ => {
+                return Err(format!("Expected parameter name at position {}", self.pos));
+            }
+        };
+
+        // Get type annotation (required)
+        let type_annotation = match self.get_explicit_type(name.as_str())? {
+            Some(t) => t,
+            None => Err(format!(
+                "Expected parameter type annotation at {}",
+                self.pos
+            ))?,
+        };
+
+        // Build node without initialization
+        Ok(Node::LetBinding {
+            name,
+            mutability: false,
+            value: Box::new(Node::Literal(Value::Null)),
+            type_annotation,
+        })
+    }
+
     /// Parse unary operator: -x, !x, etc.
-    fn parse_unary(&mut self, op: OperatorType) -> Result<Node, String> {
+    fn parse_unary(&mut self, op: SyntaxOperator) -> Result<Node, String> {
         // Consume unary operator
         self.advance();
 
@@ -245,7 +294,7 @@ impl Parser {
         })
     }
 
-    /// Parse atomic expression: number, variable, or parenthesized expression
+    /// Parse atomic expression: number, variable, parenthesized expression, function call
     fn parse_atom(&mut self) -> Result<Node, String> {
         match self.peek() {
             // Parse literal
@@ -261,22 +310,31 @@ impl Parser {
                 Ok(value_node)
             }
 
-            // Parse variable reference
+            // Parse variable reference or function call
             Some(Token::Identifier(name)) => {
                 let name = name.clone();
                 self.advance();
-                Ok(Node::Variable(name))
+
+                // Check if followed by '(' for function call
+                if self.peek_operator() == Some(SyntaxOperator::LParen) {
+                    self.advance(); // consume '('
+                    let args = self.parse_arguments()?;
+                    self.expect_operator(SyntaxOperator::RParen)?;
+                    Ok(Node::Call { name, args })
+                } else {
+                    Ok(Node::Reference(name))
+                }
             }
 
             // Parse parenthesis
-            Some(Token::Operator(OperatorType::LParen)) => {
+            Some(Token::SyntaxToken(SyntaxOperator::LParen)) => {
                 // Consume '('
                 self.advance();
 
                 // Parse expression inside
                 let expr = self.parse_expression()?;
                 // Check for ')'
-                self.expect_operator(OperatorType::RParen)?;
+                self.expect_operator(SyntaxOperator::RParen)?;
 
                 Ok(expr)
             }
@@ -286,16 +344,16 @@ impl Parser {
     }
 
     /// Infer type from a node. Returns error if type cannot be inferred.
-    fn infer_type_from_node(&self, node: &Node) -> Result<Option<Type>, String> {
+    fn infer_type_from_node(&self, node: &Node) -> Result<Type, String> {
         match node {
             Node::Literal(val) => match val {
-                Value::Integer(_) => Ok(Some(Type::Integer)),
-                Value::Float(_) => Ok(Some(Type::Float)),
-                Value::String(_) => Ok(Some(Type::String)),
-                Value::Boolean(_) => Ok(Some(Type::Boolean)),
-                Value::Null => Ok(None),
+                Value::Integer(_) => Ok(Type::Integer),
+                Value::Float(_) => Ok(Type::Float),
+                Value::String(_) => Ok(Type::String),
+                Value::Boolean(_) => Ok(Type::Boolean),
+                Value::Null => Ok(Type::Null),
             },
-            Node::Variable(_) => Err(format!(
+            Node::Reference(_) => Err(format!(
                 "Cannot infer type from variable reference. Please provide explicit type annotation at {}.",
                 self.pos
             )),
@@ -303,7 +361,11 @@ impl Parser {
                 "Cannot infer type from expression '{}'. Please provide explicit type annotation at {}.",
                 name, self.pos
             )),
-            Node::Statement { .. } => Err(format!(
+            Node::LetBinding { .. } => Err(format!(
+                "Cannot infer type from nested statement. Please provide explicit type annotation at {}.",
+                self.pos
+            )),
+            Node::FuncBinding { .. } => Err(format!(
                 "Cannot infer type from nested statement. Please provide explicit type annotation at {}.",
                 self.pos
             )),
@@ -318,7 +380,7 @@ impl Parser {
         }
     }
 
-    fn expect_operator(&mut self, expected: OperatorType) -> Result<(), String> {
+    fn expect_operator(&mut self, expected: SyntaxOperator) -> Result<(), String> {
         match self.peek_operator() {
             Some(op) if op == expected => {
                 self.advance();
@@ -334,10 +396,37 @@ impl Parser {
         }
     }
 
+    /// Try to parse explicit type annotation (only if colon is present)
+    fn get_explicit_type(&mut self, name: &str) -> Result<Option<Type>, String> {
+        if self.peek_operator() == Some(SyntaxOperator::Colon) {
+            self.advance(); // consume ':'
+
+            match self.peek() {
+                Some(Token::Type(n)) => {
+                    let type_annotation = n.clone().parse::<Type>()?;
+                    self.advance();
+                    Ok(Some(type_annotation))
+                }
+                _ => Err(format!(
+                    "Expected type after ':' in 'let {}' at {}",
+                    name, self.pos
+                )),
+            }
+        } else {
+            // No colon, so no explicit type annotation
+            Ok(None)
+        }
+    }
+
     fn consume_semicolon(&mut self) {
-        if self.peek_operator() == Some(OperatorType::Semicolon) {
+        if self.peek_operator() == Some(SyntaxOperator::Semicolon) {
             self.advance();
         }
+    }
+
+    /// Returns true if the next operator is curly brace ('}')
+    fn peek_curly(&mut self) -> bool {
+        matches!(self.peek_operator(), Some(SyntaxOperator::CurlyRParen))
     }
 
     fn error_unexpected_token(&self) -> Result<Node, String> {
@@ -355,12 +444,8 @@ impl Parser {
         self.tokens.get(self.pos)
     }
 
-    fn peek_operator(&self) -> Option<OperatorType> {
+    fn peek_operator(&self) -> Option<SyntaxOperator> {
         self.peek().and_then(|t| t.as_operator().cloned())
-    }
-
-    fn peek_function(&self) -> Option<String> {
-        self.peek().and_then(|t| t.as_function().cloned())
     }
 
     fn peek_keyword(&self, keyword: &str) -> bool {

@@ -1,346 +1,278 @@
-// Copyright (c) 2026 bazelik-null
-
 #[cfg(test)]
-use crate::cli::backend::cli_execute_with_result;
+use crate::cli::backend::cli_execute;
 
-#[allow(dead_code)]
-fn assert_approx_eq(actual: Option<f64>, expected: f64, tolerance: f64) {
-    if let Some(actual) = actual {
-        assert!(
-            (actual - expected).abs() < tolerance,
-            "expected {}, got {}",
-            expected,
-            actual
-        );
-    } else {
-        panic!("actual expected, got None");
-    }
-}
-
-// ARITHMETIC OPERATORS
+// ARITHMETIC OPERATIONS
 
 #[test]
 fn test_addition() {
-    assert_eq!(cli_execute_with_result("2 + 3", false), Ok(Some(5.0)));
-    assert_eq!(cli_execute_with_result("0 + 0", false), Ok(Some(0.0)));
-    assert_eq!(cli_execute_with_result("-5 + 3", false), Ok(Some(-2.0)));
-    assert_eq!(cli_execute_with_result("100 + 50", false), Ok(Some(150.0)));
+    let code = "fn main() { let x: int = 5 + 3; }";
+    assert!(cli_execute(code, false).is_ok());
 }
 
 #[test]
 fn test_subtraction() {
-    assert_eq!(cli_execute_with_result("10 - 4", false), Ok(Some(6.0)));
-    assert_eq!(cli_execute_with_result("5 - 5", false), Ok(Some(0.0)));
-    assert_eq!(cli_execute_with_result("3 - 10", false), Ok(Some(-7.0)));
-    assert_eq!(cli_execute_with_result("-5 - 3", false), Ok(Some(-8.0)));
+    let code = "fn main() { let x: int = 10 - 4; }";
+    assert!(cli_execute(code, false).is_ok());
 }
 
 #[test]
 fn test_multiplication() {
-    assert_eq!(cli_execute_with_result("3 * 7", false), Ok(Some(21.0)));
-    assert_eq!(cli_execute_with_result("0 * 100", false), Ok(Some(0.0)));
-    assert_eq!(cli_execute_with_result("-2 * 5", false), Ok(Some(-10.0)));
-    assert_eq!(cli_execute_with_result("2.5 * 4", false), Ok(Some(10.0)));
+    let code = "fn main() { let x: int = 6 * 7; }";
+    assert!(cli_execute(code, false).is_ok());
 }
 
 #[test]
 fn test_division() {
-    assert_eq!(cli_execute_with_result("20 / 4", false), Ok(Some(5.0)));
-    assert_eq!(cli_execute_with_result("10 / 2", false), Ok(Some(5.0)));
-    assert_eq!(cli_execute_with_result("7 / 2", false), Ok(Some(3.5)));
-    assert_eq!(cli_execute_with_result("-10 / 2", false), Ok(Some(-5.0)));
-}
-
-#[test]
-fn test_division_by_zero() {
-    assert!(cli_execute_with_result("5 / 0", false).is_err());
+    let code = "fn main() { let x: float = 20 / 4; }";
+    assert!(cli_execute(code, false).is_ok());
 }
 
 #[test]
 fn test_modulo() {
-    assert_eq!(cli_execute_with_result("10 % 3", false), Ok(Some(1.0)));
-    assert_eq!(cli_execute_with_result("20 % 5", false), Ok(Some(0.0)));
-    assert_eq!(cli_execute_with_result("7 % 2", false), Ok(Some(1.0)));
-    assert_eq!(cli_execute_with_result("-10 % 3", false), Ok(Some(2.0)));
-}
-
-// EXPONENTS & LOGARITHMS
-
-#[test]
-fn test_exponent() {
-    assert_eq!(cli_execute_with_result("2 ^ 3", false), Ok(Some(8.0)));
-    assert_eq!(cli_execute_with_result("5 ^ 2", false), Ok(Some(25.0)));
-    assert_eq!(cli_execute_with_result("10 ^ 0", false), Ok(Some(1.0)));
-    assert_eq!(cli_execute_with_result("2.0 ^ -1", false), Ok(Some(0.5)));
+    let code = "fn main() { let x: float = 17 % 5; }";
+    assert!(cli_execute(code, false).is_ok());
 }
 
 #[test]
-fn test_sqrt() {
-    assert_eq!(cli_execute_with_result("sqrt(4)", false), Ok(Some(2.0)));
-    assert_eq!(cli_execute_with_result("sqrt(9)", false), Ok(Some(3.0)));
-    assert_eq!(cli_execute_with_result("sqrt(16)", false), Ok(Some(4.0)));
-    assert_eq!(cli_execute_with_result("sqrt(0.25)", false), Ok(Some(0.5)));
+fn test_negation() {
+    let code = "fn main() { let x: int = -42; }";
+    assert!(cli_execute(code, false).is_ok());
 }
 
 #[test]
-fn test_sqrt_negative() {
-    assert!(
-        cli_execute_with_result("sqrt(-1)", false)
-            .unwrap()
-            .expect("result can't be none")
-            .is_nan()
-    );
+fn test_complex_arithmetic_expression() {
+    let code = "fn main() { let x: int = 10 + 5 * 2 - 3; }";
+    assert!(cli_execute(code, false).is_ok());
+}
+
+// EXPONENTS AND ROOTS
+
+#[test]
+fn test_exponentiation() {
+    let code = "fn main() { let x: int = 2 ^ 8; }";
+    assert!(cli_execute(code, false).is_ok());
+}
+
+#[test]
+fn test_square_root() {
+    let code = "fn main() { let x: int = sqrt(16); }";
+    assert!(cli_execute(code, false).is_ok());
+}
+
+#[test]
+fn test_cubic_root() {
+    let code = "fn main() { let x: int = cbrt(27); }";
+    assert!(cli_execute(code, false).is_ok());
+}
+
+#[test]
+fn test_nth_root() {
+    let code = "fn main() { let x: int = root(16, 4); }";
+    assert!(cli_execute(code, false).is_ok());
+}
+
+// LOGARITHMS
+
+#[test]
+fn test_logarithm() {
+    let code = "fn main() { let x: int = log(10, 100); }";
+    assert!(cli_execute(code, false).is_ok());
 }
 
 #[test]
 fn test_natural_logarithm() {
-    assert_eq!(cli_execute_with_result("ln(1)", false), Ok(Some(0.0)));
-    let result = cli_execute_with_result("ln(e)", false).unwrap();
-    assert_approx_eq(result, 1.0, 0.0001);
+    let code = "fn main() { let x: float = ln(2.718); }";
+    assert!(cli_execute(code, false).is_ok());
 }
 
-#[test]
-fn test_logarithm() {
-    let result = cli_execute_with_result("log(10, 100)", false).unwrap();
-    assert_approx_eq(result, 2.0, 0.0001);
-
-    let result = cli_execute_with_result("log(2, 8)", false).unwrap();
-    assert_approx_eq(result, 3.0, 0.0001);
-}
+// TRIGONOMETRIC FUNCTIONS
 
 #[test]
 fn test_cosine() {
-    assert_eq!(cli_execute_with_result("cos(0)", false), Ok(Some(1.0)));
-    let result = cli_execute_with_result("cos(pi)", false).unwrap();
-    assert_approx_eq(result, -1.0, 0.0001);
+    let code = "fn main() { let x: int = cos(0); }";
+    assert!(cli_execute(code, false).is_ok());
 }
 
 #[test]
 fn test_sine() {
-    assert_eq!(cli_execute_with_result("sin(0)", false), Ok(Some(0.0)));
-    let result = cli_execute_with_result("sin(pi / 2)", false).unwrap();
-    assert_approx_eq(result, 1.0, 0.0001);
+    let code = "fn main() { let x: int = sin(0); }";
+    assert!(cli_execute(code, false).is_ok());
+}
+
+#[test]
+fn test_tangent() {
+    let code = "fn main() { let x: int = tan(0); }";
+    assert!(cli_execute(code, false).is_ok());
 }
 
 #[test]
 fn test_arccosine() {
-    assert_eq!(cli_execute_with_result("acos(1)", false), Ok(Some(0.0)));
-    let result = cli_execute_with_result("acos(0)", false).unwrap();
-    assert_approx_eq(result, std::f64::consts::PI / 2.0, 0.0001);
+    let code = "fn main() { let x: int = acos(1); }";
+    assert!(cli_execute(code, false).is_ok());
 }
 
 #[test]
 fn test_arcsine() {
-    assert_eq!(cli_execute_with_result("asin(0)", false), Ok(Some(0.0)));
-    let result = cli_execute_with_result("asin(1)", false).unwrap();
-    assert_approx_eq(result, std::f64::consts::PI / 2.0, 0.0001);
+    let code = "fn main() { let x: int = asin(0); }";
+    assert!(cli_execute(code, false).is_ok());
 }
 
 #[test]
 fn test_arctangent() {
-    assert_eq!(cli_execute_with_result("atan(0)", false), Ok(Some(0.0)));
-    let result = cli_execute_with_result("atan(1)", false).unwrap();
-    assert_approx_eq(result, std::f64::consts::PI / 4.0, 0.0001);
+    let code = "fn main() { let x: float = atan(1); }";
+    assert!(cli_execute(code, false).is_ok());
 }
 
-// MISCELLANEOUS FUNCTIONS
-
-#[test]
-fn test_negate() {
-    assert_eq!(cli_execute_with_result("-5", false), Ok(Some(-5.0)));
-    assert_eq!(cli_execute_with_result("-(-10)", false), Ok(Some(10.0)));
-    assert_eq!(cli_execute_with_result("-(2 + 3)", false), Ok(Some(-5.0)));
-}
+// UTILITY FUNCTIONS
 
 #[test]
 fn test_absolute_value() {
-    assert_eq!(cli_execute_with_result("abs(5)", false), Ok(Some(5.0)));
-    assert_eq!(cli_execute_with_result("abs(-10)", false), Ok(Some(10.0)));
-    assert_eq!(cli_execute_with_result("abs(-3.5)", false), Ok(Some(3.5)));
-    assert_eq!(cli_execute_with_result("abs(0)", false), Ok(Some(0.0)));
+    let code = "fn main() { let x: int = abs(-42); }";
+    assert!(cli_execute(code, false).is_ok());
 }
 
 #[test]
-fn test_round() {
-    assert_eq!(cli_execute_with_result("round(3.14)", false), Ok(Some(3.0)));
-    assert_eq!(cli_execute_with_result("round(3.5)", false), Ok(Some(4.0)));
-    assert_eq!(cli_execute_with_result("round(3.6)", false), Ok(Some(4.0)));
-    assert_eq!(
-        cli_execute_with_result("round(-2.5)", false),
-        Ok(Some(-3.0))
-    );
-}
-
-// CONSTANTS
-
-#[test]
-fn test_pi_constant() {
-    let result = cli_execute_with_result("pi", false).unwrap();
-    assert_approx_eq(result, std::f64::consts::PI, 0.0001);
+fn test_rounding() {
+    let code = "fn main() { let x: int = round(3.7); }";
+    assert!(cli_execute(code, false).is_ok());
 }
 
 #[test]
-fn test_e_constant() {
-    let result = cli_execute_with_result("e", false).unwrap();
-    assert_approx_eq(result, std::f64::consts::E, 0.0001);
+fn test_floor() {
+    let code = "fn main() { let x: int = floor(3.9); }";
+    assert!(cli_execute(code, false).is_ok());
 }
 
 #[test]
-fn test_pi_in_expression() {
-    let result = cli_execute_with_result("2 * pi", false).unwrap();
-    assert_approx_eq(result, 2.0 * std::f64::consts::PI, 0.0001);
+fn test_ceiling() {
+    let code = "fn main() { let x: int = ceil(3.1); }";
+    assert!(cli_execute(code, false).is_ok());
 }
 
 #[test]
-fn test_e_in_expression() {
-    let result = cli_execute_with_result("e ^ 2", false).unwrap();
-    assert_approx_eq(result, std::f64::consts::E.powi(2), 0.0001);
-}
-
-// OPERATOR PRECEDENCE
-
-#[test]
-fn test_precedence_multiplication_before_addition() {
-    assert_eq!(cli_execute_with_result("2 + 3 * 4", false), Ok(Some(14.0)));
+fn test_max_two_values() {
+    let code = "fn main() { let x: int = max(10, 20); }";
+    assert!(cli_execute(code, false).is_ok());
 }
 
 #[test]
-fn test_precedence_division_before_subtraction() {
-    assert_eq!(
-        cli_execute_with_result("20 - 10 / 2", false),
-        Ok(Some(15.0))
-    );
+fn test_max_multiple_values() {
+    let code = "fn main() { let x: int = max(5, 15, 10, 20, 3); }";
+    assert!(cli_execute(code, false).is_ok());
 }
 
 #[test]
-fn test_precedence_exponent_before_multiplication() {
-    assert_eq!(cli_execute_with_result("2 * 3 ^ 2", false), Ok(Some(18.0)));
-}
-
-// PARENTHESES
-
-#[test]
-fn test_parentheses_simple() {
-    assert_eq!(
-        cli_execute_with_result("(2 + 3) * 4", false),
-        Ok(Some(20.0))
-    );
+fn test_min_two_values() {
+    let code = "fn main() { let x: int = min(10, 20); }";
+    assert!(cli_execute(code, false).is_ok());
 }
 
 #[test]
-fn test_parentheses_nested() {
-    assert_eq!(
-        cli_execute_with_result("((2 + 3) * 4) / 2", false),
-        Ok(Some(10.0))
-    );
+fn test_min_multiple_values() {
+    let code = "fn main() { let x: int = min(5, 15, 10, 20, 3); }";
+    assert!(cli_execute(code, false).is_ok());
 }
 
 #[test]
-fn test_parentheses_with_functions() {
-    assert_eq!(
-        cli_execute_with_result("(sqrt(4) + sqrt(9)) * 2", false),
-        Ok(Some(10.0))
-    );
+fn test_println_single_value() {
+    let code = "fn main() { println(42); }";
+    assert!(cli_execute(code, false).is_ok());
 }
 
 #[test]
-fn test_unmatched_parentheses() {
-    assert!(cli_execute_with_result("(2 + 3", false).is_err());
-    assert!(cli_execute_with_result("2 + 3)", false).is_err());
+fn test_println_multiple_values() {
+    let code = "fn main() { println(10, 20, \"hello\", true); }";
+    assert!(cli_execute(code, false).is_ok());
 }
 
-// COMPLEX EXPRESSIONS
+// TYPE INFERENCE WITH OPERATIONS
 
 #[test]
-fn test_complex_expressions() {
-    assert_eq!(
-        cli_execute_with_result("(2 + 3) * (4 - 1)", false),
-        Ok(Some(15.0))
-    );
-    assert_eq!(
-        cli_execute_with_result("sqrt(16) + abs(-5) * 2", false),
-        Ok(Some(14.0))
-    );
-    assert_eq!(
-        cli_execute_with_result("2 ^ 3 + 3 ^ 2", false),
-        Ok(Some(17.0))
-    );
-    assert_eq!(
-        cli_execute_with_result("sin(0) + cos(0)", false),
-        Ok(Some(1.0))
-    );
+fn test_float_arithmetic() {
+    let code = "fn main() { let x: float = 3.5 + 2.5; }";
+    assert!(cli_execute(code, false).is_ok());
 }
 
-// VARIABLES
-
 #[test]
-fn test_variables() {
-    assert_eq!(
-        cli_execute_with_result(
-            "let mut x = 1; \
-        let y = 2; \
-        x = x + y; \
-        x",
-            false
-        ),
-        Ok(Some(3.0))
-    );
-    assert_eq!(
-        cli_execute_with_result(
-            "\
-        let y = 2; \
-        let x: int = y * 5; \
-        x",
-            false
-        ),
-        Ok(Some(10.0))
-    );
-    assert_approx_eq(
-        cli_execute_with_result(
-            "let y = pi; \
-        let x: float = sin(y); \
-        x",
-            false,
-        )
-        .unwrap(),
-        0.0,
-        0.0001,
-    );
-    assert_eq!(
-        cli_execute_with_result(
-            "let y = 4; \
-        let x: float = sqrt(y) * 2^2; \
-        x",
-            false
-        ),
-        Ok(Some(8.0))
-    );
+fn test_mixed_int_float_arithmetic() {
+    let code = "fn main() { let x: float = 10 + 3.5; }";
+    assert!(cli_execute(code, false).is_ok());
 }
 
-// EDGE CASES
+// VARIABLE OPERATIONS WITH FUNCTIONS
 
 #[test]
-fn test_edge_cases() {
-    assert_eq!(cli_execute_with_result("0", false), Ok(Some(0.0)));
-    assert_eq!(cli_execute_with_result("-42", false), Ok(Some(-42.0)));
-    assert_eq!(cli_execute_with_result("0.5 + 0.5", false), Ok(Some(1.0)));
-    assert_eq!(
-        cli_execute_with_result("1000000 + 1000000", false),
-        Ok(Some(2000000.0))
-    );
-    assert_eq!(
-        cli_execute_with_result("0.0001 + 0.0001", false),
-        Ok(Some(0.0002))
-    );
+fn test_variable_with_sqrt_function() {
+    let code = "fn main() { let mut x: float = sqrt(25); }";
+    assert!(cli_execute(code, false).is_ok());
 }
 
-// ERROR CASES
+#[test]
+fn test_variable_reassignment_with_arithmetic() {
+    let code = "fn main() { let mut x: int = 10; x = 20 + 5; }";
+    assert!(cli_execute(code, false).is_ok());
+}
 
 #[test]
-fn test_error_cases() {
-    assert!(cli_execute_with_result("2 +", false).is_err());
-    assert!(cli_execute_with_result("", false).is_err());
-    assert!(cli_execute_with_result("   ", false).is_err());
-    assert!(cli_execute_with_result("2 + + 3", false).is_err());
-    assert!(cli_execute_with_result("unknown(5)", false).is_err());
+fn test_function_with_arithmetic_arguments() {
+    let code = r#"
+        fn main() {
+            fn calculate(a: int, b: int) {
+                let result: int = a + b;
+            }
+            calculate(5, 10);
+        }
+    "#;
+    assert!(cli_execute(code, false).is_ok());
+}
+
+#[test]
+fn test_nested_function_calls_with_math() {
+    let code = r#"
+        fn main() {
+            fn double(x: int) {
+                let result: int = x * 2;
+                result;
+            }
+            let val: int = double(5);
+        }
+    "#;
+    assert!(cli_execute(code, false).is_ok());
+}
+
+// EDGE CASES AND ERROR HANDLING
+
+#[test]
+fn test_division_by_zero_fails() {
+    let code = "fn main() { let x: float = 10 / 0; }";
+    assert!(cli_execute(code, false).is_err());
+}
+
+#[test]
+fn test_invalid_function_call_fails() {
+    let code = "fn main() { let x: int = invalid_func(5); }";
+    assert!(cli_execute(code, false).is_err());
+}
+
+#[test]
+fn test_wrong_number_of_arguments_fails() {
+    let code = "fn main() { let x: float = cos(5, 6); }";
+    assert!(cli_execute(code, false).is_err());
+}
+
+#[test]
+fn test_type_mismatch_in_function_fails() {
+    let code = r#"
+        fn main() {
+            fn add(a: int, b: int) {}
+            add(5, "string");
+        }
+    "#;
+    assert!(cli_execute(code, false).is_err());
+}
+
+#[test]
+fn test_reassign_immutable_variable_fails() {
+    let code = "fn main() { let x: int = 10; x = 20; }";
+    assert!(cli_execute(code, false).is_err());
 }

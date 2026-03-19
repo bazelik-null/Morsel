@@ -1,6 +1,7 @@
 // Copyright (c) 2026 bazelik-null
 
-use crate::morsel_core::parsing::node::Node;
+use crate::morsel_interpreter::environment::types::Type;
+use crate::morsel_interpreter::parser::ast_node::Node;
 use std::collections::HashMap;
 
 pub struct FunctionTable {
@@ -16,7 +17,14 @@ pub struct FunctionInfo {
     pub min_args: usize,
     pub max_args: Option<usize>, // None = unlimited
 
-    pub implementation: Option<Node>, // None if builtin
+    pub parameters: Vec<FunctionParam>, // Store parameter metadata
+    pub implementation: Option<Node>,   // None if builtin
+}
+
+#[derive(Clone, Debug)]
+pub struct FunctionParam {
+    pub name: String,
+    pub param_type: Type,
 }
 
 impl Default for FunctionTable {
@@ -26,7 +34,7 @@ impl Default for FunctionTable {
 }
 
 impl FunctionTable {
-    /// Create a new function table with all supported functions
+    /// Create a new function table with built-in functions
     pub fn new() -> Self {
         let builtin = init_builtins();
 
@@ -35,43 +43,37 @@ impl FunctionTable {
 
     /// Register a new user-defined function
     pub fn register_function(&mut self, info: FunctionInfo) -> Result<(), String> {
-        let key = info.name.to_lowercase();
-
-        if self.functions.contains_key(&key) {
-            if self.functions[&key].builtin {
+        if self.functions.contains_key(&info.name) {
+            if self.functions[&info.name].builtin {
                 return Err(format!("Cannot override builtin function '{}'", info.name));
             }
             return Err(format!("Function '{}' is already registered", info.name));
         }
 
-        self.functions.insert(key, info);
+        self.functions.insert(info.name.clone(), info);
         Ok(())
     }
 
     /// Update an existing function (overwrite)
     pub fn update_function(&mut self, info: FunctionInfo) -> Result<(), String> {
-        let key = info.name.to_lowercase();
-
-        if !self.functions.contains_key(&key) {
+        if !self.functions.contains_key(&info.name) {
             return Err(format!("Function '{}' does not exist", info.name));
         }
 
-        self.functions.insert(key, info);
+        self.functions.insert(info.name.clone(), info);
         Ok(())
     }
 
     /// Remove a function from the table
     pub fn remove_function(&mut self, name: &str) -> Result<FunctionInfo, String> {
-        let key = name.to_lowercase();
-
         self.functions
-            .remove(&key)
+            .remove(name)
             .ok_or_else(|| format!("Function '{}' not found", name))
     }
 
     /// Get mutable reference to function info (for direct modification)
     pub fn get_function_mut(&mut self, name: &str) -> Option<&mut FunctionInfo> {
-        self.functions.get_mut(&name.to_lowercase())
+        self.functions.get_mut(name)
     }
 
     /// Clear all user-defined functions (keeps builtins)
@@ -81,26 +83,17 @@ impl FunctionTable {
 
     /// Check if a function exists
     pub fn is_function(&self, name: &str) -> bool {
-        self.functions.contains_key(&name.to_lowercase())
+        self.functions.contains_key(name)
     }
 
     /// Check if a function is builtin
     pub fn is_builtin(&self, name: &str) -> bool {
-        if !self.is_function(name) {
-            return false;
-        }
-
-        self.functions.get(&name.to_lowercase()).unwrap().builtin
+        self.get_function(name).map(|f| f.builtin).unwrap_or(false)
     }
 
     /// Get function info
     pub fn get_function(&self, name: &str) -> Option<&FunctionInfo> {
-        self.functions.get(&name.to_lowercase())
-    }
-
-    /// Clone function info
-    pub fn get_function_owned(&self, name: &str) -> Option<FunctionInfo> {
-        self.functions.get(&name.to_lowercase()).cloned()
+        self.functions.get(name)
     }
 
     /// Get all function names
@@ -108,28 +101,33 @@ impl FunctionTable {
         self.functions.keys().cloned().collect()
     }
 
+    /// Lookup a function, returning an error if not found
+    pub fn lookup_function(&self, name: &str) -> Result<&FunctionInfo, String> {
+        self.get_function(name)
+            .ok_or_else(|| format!("Unknown function: '{}'", name))
+    }
+
     /// Validate argument count
     pub fn validate_args(&self, name: &str, arg_count: usize) -> Result<(), String> {
-        match self.get_function(name) {
-            Some(info) => {
-                if arg_count < info.min_args {
-                    return Err(format!(
-                        "Function '{}' requires at least {} argument(s), got {}",
-                        name, info.min_args, arg_count
-                    ));
-                }
-                if let Some(max) = info.max_args
-                    && arg_count > max
-                {
-                    return Err(format!(
-                        "Function '{}' accepts at most {} argument(s), got {}",
-                        name, max, arg_count
-                    ));
-                }
-                Ok(())
-            }
-            None => Err(format!("Unknown function: '{}'", name)),
+        let info = self.lookup_function(name)?;
+
+        if arg_count < info.min_args {
+            return Err(format!(
+                "Function '{}' requires at least {} argument(s), got {}",
+                name, info.min_args, arg_count
+            ));
         }
+
+        if let Some(max) = info.max_args
+            && arg_count > max
+        {
+            return Err(format!(
+                "Function '{}' accepts at most {} argument(s), got {}",
+                name, max, arg_count
+            ));
+        }
+
+        Ok(())
     }
 }
 
@@ -168,6 +166,7 @@ fn init_builtins() -> HashMap<String, FunctionInfo> {
                 min_args: min,
                 max_args: max,
                 implementation: None,
+                parameters: Vec::new(),
             },
         )
     })

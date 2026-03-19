@@ -1,0 +1,61 @@
+// Introduction to Functions
+// To execute use ./Morsel examples/functions.msl
+// Or ./Morsel and "file examples/functions.msl"
+
+fn add(x: int, y: int) {
+    x + y
+}
+
+fn greet(name: string) {
+    println("Hello,", name, "!");
+}
+
+fn max_of_three(a: int, b: int, c: int) {
+    max(a, b, c)
+}
+
+fn rectangle_area(length: int, width: int) {
+    length * width
+}
+
+fn celsius_to_fahrenheit(celsius: float) {
+    (celsius * 9.0 / 5.0) + 32.0
+}
+
+fn main() {
+    println("== What is a Function? ==");
+    println("A function holds a piece of code that does a specific task.");
+    println("A function takes some data as input, the code inside the function does something with the data, and then the result is returned.\n");
+
+    println("== Simple Functions ==");
+    let result1: int = add(5, 3);
+    println("5 + 3 =", result1);
+
+    let result2: int = add(10, 20);
+    println("10 + 20 =", result2);
+
+    println("\n== Functions Make Code Reusable ==");
+    greet("Alice");
+    greet("Bob");
+    greet("Charlie");
+
+    println("\n== Functions with Multiple Parameters ==");
+    let largest: int = max_of_three(15, 42, 8);
+    println("Largest of 15, 42, 8 is:", largest);
+
+    println("\n== Functions that Return Values ==");
+    let area: int = rectangle_area(10, 5);
+    println("Area of 10 x 5 rectangle:", area);
+    println("Area of 7 x 3 rectangle:", rectangle_area(7, 3));
+
+    println("\n== A Practical Example ==");
+    let temp_c = 25.0;
+    let temp_f: float = celsius_to_fahrenheit(temp_c);
+    println(temp_c, "°C is", temp_f, "°F");
+
+    let another_temp: float = celsius_to_fahrenheit(0.0);
+    println("0°C is", another_temp, "°F");
+
+    println("\n== The main() Function ==");
+    println("Every program needs a main() function. That's where your program starts.");
+}

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 bazelik-null
 
 pub mod cli;
-pub mod morsel_core;
+pub mod morsel_interpreter;
 mod tests;
 
 use std::env;

@@ -1,5 +1,5 @@
 // Copyright (c) 2026 bazelik-null
 
-pub mod lexer;
-pub mod operators;
+pub mod syntax_operator;
 pub mod token;
+pub mod tokenizer;

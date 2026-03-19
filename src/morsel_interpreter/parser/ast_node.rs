@@ -1,6 +1,7 @@
 // Copyright (c) 2026 bazelik-null
 
-use crate::morsel_core::evaluating::variable::{Type, Value};
+use crate::morsel_interpreter::environment::types::Type;
+use crate::morsel_interpreter::environment::variable::Value;
 use std::fmt;
 
 #[derive(Debug, Clone)]
@@ -8,7 +9,7 @@ pub enum Node {
     // Literals
     Literal(Value),
     // Variable references
-    Variable(String),
+    Reference(String),
 
     // Operations (unary, binary, functions)
     Call {
@@ -16,12 +17,19 @@ pub enum Node {
         args: Vec<Node>, // [left, right] for binary, [child] for unary
     },
 
-    // Statements (let)
-    Statement {
+    // Variable binding
+    LetBinding {
         name: String,
         mutability: bool,
         value: Box<Node>,
-        type_annotation: Option<Type>,
+        type_annotation: Type,
+    },
+
+    // Function binding
+    FuncBinding {
+        name: String,
+        args: Vec<Node>,           // Should be LetBinding
+        implementation: Box<Node>, // Should be Block
     },
 
     // Assignment (x = y)
@@ -45,8 +53,9 @@ impl Node {
     pub fn children(&self) -> Vec<&Node> {
         match self {
             Node::Block(statements) => statements.iter().collect(),
-            Node::Literal(_) | Node::Variable(_) => vec![],
-            Node::Statement { value, .. } => vec![value.as_ref()],
+            Node::Literal(_) | Node::Reference(_) => vec![],
+            Node::LetBinding { value, .. } => vec![value.as_ref()],
+            Node::FuncBinding { implementation, .. } => vec![implementation.as_ref()],
             Node::Assignment { value, .. } => vec![value.as_ref()],
             Node::Call { args, .. } => args.iter().collect(),
         }
@@ -65,10 +74,10 @@ impl Node {
                 Value::String(_) => format!("Literal(\"{}\")", value),
                 _ => format!("Literal({})", value),
             },
-            Node::Variable(name) => {
+            Node::Reference(name) => {
                 format!("Variable({})", name)
             }
-            Node::Statement {
+            Node::LetBinding {
                 name, mutability, ..
             } => {
                 if *mutability {
@@ -76,6 +85,9 @@ impl Node {
                 } else {
                     format!("Let({})", name)
                 }
+            }
+            Node::FuncBinding { name, .. } => {
+                format!("Func({})", name)
             }
             Node::Assignment { name, .. } => {
                 format!("Assign({})", name)

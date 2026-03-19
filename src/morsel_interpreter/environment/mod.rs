@@ -1,4 +1,4 @@
-pub mod evaluator;
 pub mod functions;
-pub mod stack;
+pub mod scope;
+pub mod types;
 pub mod variable;

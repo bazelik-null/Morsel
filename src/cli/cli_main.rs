@@ -1,8 +1,8 @@
 // Copyright (c) 2026 bazelik-null
 
 use crate::cli::app_state::AppState;
-use crate::cli::backend::{cli_execute_with_result, eval_file};
-use crate::cli::cmd::Command;
+use crate::cli::backend::{cli_execute, eval_file};
+use crate::cli::commands::Command;
 use std::io::Write;
 
 use rustyline::DefaultEditor;
@@ -25,7 +25,7 @@ pub fn cli_init() {
 
     let mut state = AppState::default();
 
-    // Main REPL loop
+    // Main loop
     loop {
         match editor.readline(PROMPT) {
             Ok(line) => {
@@ -160,11 +160,10 @@ fn handle_file_command(file_path: &str, debug: bool) {
 }
 
 fn execute_expression(input: &str, debug: bool) {
-    match cli_execute_with_result(input, debug) {
-        Ok(Some(result)) => {
-            println!("{}", result);
+    match cli_execute(input, debug) {
+        Ok(()) => {
+            println!("[INFO]: Execution complete");
         }
-        Ok(None) => {}
         Err(err) => {
             eprintln!("[ERROR]: {}", err);
         }

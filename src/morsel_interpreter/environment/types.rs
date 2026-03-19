@@ -1,16 +1,7 @@
 // Copyright (c) 2026 bazelik-null
 
+use crate::morsel_interpreter::environment::variable::Value;
 use std::str::FromStr;
-
-/// Represents any value in the interpreter
-#[derive(Clone, Debug, PartialEq)]
-pub enum Value {
-    Float(f64),
-    Integer(i64),
-    String(String),
-    Boolean(bool),
-    Null,
-}
 
 /// Represents the type of value for strict type checking
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -88,63 +79,5 @@ impl std::fmt::Display for Type {
             Type::Null => write!(f, "null"),
             Type::Any => write!(f, "any"),
         }
-    }
-}
-
-impl Value {
-    /// Get the type of this value
-    pub fn type_of(&self) -> Type {
-        Type::of(self)
-    }
-
-    /// Convert to f64 (only for numeric types)
-    pub fn to_float(&self) -> Result<f64, String> {
-        match self {
-            Value::Float(f) => Ok(*f),
-            Value::Integer(i) => Ok(*i as f64),
-            _ => Err(format!("Cannot convert {} to float", self.type_of())),
-        }
-    }
-
-    /// Convert to integer (only for numeric types)
-    pub fn to_integer(&self) -> Result<i64, String> {
-        match self {
-            Value::Integer(i) => Ok(*i),
-            Value::Float(f) => Ok(*f as i64),
-            _ => Err(format!("Cannot convert {} to integer", self.type_of())),
-        }
-    }
-
-    /// Convert to string (only for string types)
-    pub fn to_string_value(&self) -> Result<String, String> {
-        match self {
-            Value::String(s) => Ok(s.clone()),
-            _ => Err(format!("Cannot convert {} to string", self.type_of())),
-        }
-    }
-
-    /// Convert to boolean (only for boolean types)
-    pub fn to_bool(&self) -> Result<bool, String> {
-        match self {
-            Value::Boolean(b) => Ok(*b),
-            _ => Err(format!("Cannot convert {} to boolean", self.type_of())),
-        }
-    }
-
-    /// Display value (for print function)
-    pub fn display(&self) -> String {
-        match self {
-            Value::String(s) => s.clone(),
-            Value::Float(f) => f.to_string(),
-            Value::Integer(i) => i.to_string(),
-            Value::Boolean(b) => b.to_string(),
-            Value::Null => "null".to_string(),
-        }
-    }
-}
-
-impl std::fmt::Display for Value {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.display())
     }
 }

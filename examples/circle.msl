@@ -1,0 +1,40 @@
+// Circle calculator which computes area, circumference, and related properties
+
+fn calculate_circle_properties(radius: float) {
+    // Calculate area: π * r²
+    let area: float = pi * radius ^ 2.0;
+
+    // Calculate circumference: 2 * π * r
+    let circumference: float = 2.0 * pi * radius;
+
+    // Calculate diameter
+    let diameter: float = 2.0 * radius;
+
+    // Display results
+    println("Radius: ", round(radius));
+    println("Diameter: ", round(diameter));
+    println("Area: ", round(area));
+    println("Circumference: ", round(circumference));
+    println("---");
+}
+
+fn main() {
+    // Test with different circle sizes
+    let small_circle = 5.0;
+    let medium_circle = 10.0;
+    let large_circle = 25.5;
+
+    // Calculate properties for each circle
+    calculate_circle_properties(small_circle);
+    calculate_circle_properties(medium_circle);
+    calculate_circle_properties(large_circle);
+
+    // Find the largest radius
+    let max_radius: float = max(small_circle, medium_circle, large_circle);
+    println("Largest radius: ", round(max_radius));
+
+    // Calculate area of largest circle
+    let largest_area: float = pi * max_radius ^ 2.0;
+    println("Area of largest circle: ", round(largest_area));
+}
+

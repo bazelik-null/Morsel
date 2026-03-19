@@ -21,7 +21,7 @@ impl Precedence {
 }
 
 #[derive(Debug, Default, Copy, Clone, PartialEq)]
-pub enum OperatorType {
+pub enum SyntaxOperator {
     // Arithmetic
     Add,      // x + y
     Subtract, // x - y
@@ -33,18 +33,20 @@ pub enum OperatorType {
     Negate, // -x
     Modulo, // x % y
     // Syntax
-    LParen,    // (
-    RParen,    // )
-    Comma,     // ,
-    Assign,    // =
-    Semicolon, // ;
-    Colon,     // :
+    LParen,      // (
+    RParen,      // )
+    CurlyLParen, // {
+    CurlyRParen, // }
+    Comma,       // ,
+    Assign,      // =
+    Semicolon,   // ;
+    Colon,       // :
 
     #[default]
     Unknown,
 }
 
-impl OperatorType {
+impl SyntaxOperator {
     /// Returns precedence for binary operators
     pub fn precedence(&self) -> Option<Precedence> {
         Some(match self {
@@ -68,28 +70,30 @@ impl OperatorType {
     }
 }
 
-impl fmt::Display for OperatorType {
+impl fmt::Display for SyntaxOperator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             // Arithmetic
-            OperatorType::Add => write!(f, "+"),
-            OperatorType::Subtract => write!(f, "-"),
-            OperatorType::Multiply => write!(f, "*"),
-            OperatorType::Divide => write!(f, "/"),
+            SyntaxOperator::Add => write!(f, "+"),
+            SyntaxOperator::Subtract => write!(f, "-"),
+            SyntaxOperator::Multiply => write!(f, "*"),
+            SyntaxOperator::Divide => write!(f, "/"),
             // Exponents
-            OperatorType::Exponent => write!(f, "^"),
+            SyntaxOperator::Exponent => write!(f, "^"),
             // Misc
-            OperatorType::Negate => write!(f, "-"),
-            OperatorType::Modulo => write!(f, "%"),
+            SyntaxOperator::Negate => write!(f, "-"),
+            SyntaxOperator::Modulo => write!(f, "%"),
             // Syntax
-            OperatorType::LParen => write!(f, "("),
-            OperatorType::RParen => write!(f, ")"),
-            OperatorType::Comma => write!(f, ","),
-            OperatorType::Assign => write!(f, "="),
-            OperatorType::Semicolon => write!(f, ";"),
-            OperatorType::Colon => write!(f, ":"),
+            SyntaxOperator::LParen => write!(f, "("),
+            SyntaxOperator::RParen => write!(f, ")"),
+            SyntaxOperator::CurlyLParen => write!(f, "{{"),
+            SyntaxOperator::CurlyRParen => write!(f, "}}"),
+            SyntaxOperator::Comma => write!(f, ","),
+            SyntaxOperator::Assign => write!(f, "="),
+            SyntaxOperator::Semicolon => write!(f, ";"),
+            SyntaxOperator::Colon => write!(f, ":"),
 
-            OperatorType::Unknown => write!(f, "?"),
+            SyntaxOperator::Unknown => write!(f, "?"),
         }
     }
 }
