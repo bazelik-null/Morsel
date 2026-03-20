@@ -1,3 +1,5 @@
+Here's your improved README with the changes applied:
+
 <div align="center">
 <h1> Morsel </h1>
 <img src="doc/img/logo.png" width="500">
@@ -5,37 +7,56 @@
 
 > [!WARNING]
 >
-> Work in progress.
+> Work in progress. Check [Roadmap](#roadmap)
 
 ## Introduction
 
 **Morsel** is an **interpreted** programming language built in **Rust** as my first Rust project. It combines the
-performance and
-memory safety of Rust with an easy, expression-based syntax inspired by C, Go, and Rust itself.
+performance and memory safety of Rust with an easy, expression-based syntax inspired by C, Go, and Rust itself.
 
-## Pipeline
+## Table of Contents
 
-**Morsel** evaluates expressions through a three-stage pipeline:
+- [Quick Start](#quick-start)
+- [Features](#features)
+- [Getting Started](#getting-started)
+- [Syntax Highlighting Setup](#syntax-highlighting-setup)
+- [Language Reference](#language-reference)
+- [Project Structure](#project-structure)
+- [Roadmap](#roadmap)
 
-1. **Tokenizer (Lexer)** - Converts input string into tokens
-2. **AST Builder (Parser)** - Builds an Abstract Syntax Tree (AST) from tokens
-3. **Runtime (Executor)** - Executes the AST and returns a result
+## Quick Start
 
+Here's a simple Morsel program:
+
+```morsel
+fn add(x: float, y: float) {
+    x + y
+}
+
+fn main() {
+    let first = 1;
+    let second = 2;
+    let result: int = add(first, second);
+    println("Result:", result);
+}
 ```
-Input -> [Lexer] -> Tokens -> [Parser] -> AST -> [Executor]
+
+Run it with:
+
+```bash
+./target/release/Morsel examples/quickstart.msl
 ```
 
-The `Interpreter` wrapper compiles this pipeline. Use `execute()` to build and execute source code. Enable debug mode to
-see intermediate outputs at each stage.
+Check [complete example](#complete-example) for comments with explained code
 
 ## Features
 
-- **Strict typing:** All variables require explicit or inferred types at declaration
+- **Strict typing:** Declare, assign, and manipulate variables with full type safety
+- **Functions:** Function support with type-safe arguments and implicit return values
 - **Immutability by default:** Variables are immutable unless explicitly marked as `mut`
-- **Built in Rust:** RUST🚀 RUSTRUSTRUST BLAZINGLY FAST🚀🚀 YEEEAH MEMORY SAFETY🏳️‍🌈 (sorry)
-- **Many mathematical functions:** Full support for arithmetic, trigonometric, logarithmic, and exponential functions
+- **Built in Rust:** RUST🚀 RUSTRUSTRUST BLAZINGLY FAST🚀🚀 YEEEAH MEMORY SAFETY🏳️‍🌈
+- **Math support:** Full support for arithmetic, trigonometric, logarithmic, and exponential functions
 - **Familiar syntax:** Morsel inherits syntax from C, Rust, and Go
-- **Variable management:** Declare, assign, and manipulate variables with full type safety
 
 ## Getting Started
 
@@ -61,16 +82,17 @@ see intermediate outputs at each stage.
    ```
 
 5. **Learn the basics**
+    - Check the `examples/` directory for sample Morsel programs with comments explaining the code
 
-    - Check `examples/` directory and read the code and comments
+    - Try different examples:
+      ```bash
+        ./target/release/Morsel examples/variables.msl
+        ./target/release/Morsel examples/functions.msl
+        ./target/release/Morsel examples/circle.msl
+      ```
 
-6. **Execute examples**
-   ```bash
-   ./target/release/Morsel examples/variables.msl
-   ./target/release/Morsel examples/functions.msl
-   ```
+6. **Try the interactive CLI**
 
-7. **Try the interactive CLI**
    ```bash
    ./target/release/Morsel
    ```
@@ -102,13 +124,63 @@ Files with `.morsel` or `.msl` extensions will now have syntax highlighting.
 2. Restart Sublime Text
 3. Select **View** -> **Syntax** -> **Morsel** to apply highlighting
 
----
-
 **Note:** The TextMate grammar (`morsel.tmLanguage.json`) is shared across all editors for consistency.
 
 ## Language Reference
 
-### Basic Operations
+### Variables and Types
+
+#### Variable Declaration
+
+```
+let mut name: type = value;
+```
+
+- **`mut` (optional):** Makes the variable mutable so it can be reassigned later
+- **`name` (required):** Variable name. Required for variable referencing
+- **`: type` (optional):** Specifies the data type. If omitted, the type is inferred (works only with literals)
+- **`value` (required):** All variable declarations must include an initial value or expression
+
+#### Available Data Types
+
+- **Integer:** `int` - 64-bit integer
+- **Float:** `float` - 64-bit floating-point number
+- **String:** `string` - Text data
+- **Boolean:** `bool` - Boolean value (true/false)
+
+**Note:** `null` and `any` types exist but cannot be used for variable initialization.
+
+#### Variable Assignment
+
+- **Assignment:** `x = y;` - Reassign an existing variable to a new value (variable must be declared as `mut` and types
+  should match)
+
+### Functions
+
+#### Function Declaration
+
+```
+fn name(argument: type, ...) {
+    code
+}
+```
+
+- **`name` (required):** Function name. Required for function calling
+- **`argument: type` (optional):**
+    - **`argument` (required):** Argument name. Required for variable referencing
+    - **`: type` (required):** Specifies the data type. Can't be omitted
+- **`...` (optional):** There can be unlimited amount of arguments separated by comma
+- **`{ code }` (required):** Code which will be executed at function call
+
+Functions return the value of their last expression implicitly.
+
+#### Comments
+
+```
+// Single-line comment
+```
+
+### Operations
 
 #### Arithmetic
 
@@ -140,7 +212,7 @@ Files with `.morsel` or `.msl` extensions will now have syntax highlighting.
 - **Arcsine:** `asin(x)`
 - **Arctangent:** `atan(x)`
 
-### Utility Functions
+#### Utility Functions
 
 - **Absolute value:** `abs(x)` - Returns the absolute value of x
 - **Rounding:** `round(x)` - Rounds x to the nearest integer
@@ -150,57 +222,9 @@ Files with `.morsel` or `.msl` extensions will now have syntax highlighting.
 - **Minimum:** `min(x, ...)` - Returns the smallest of the given values
 - **Print:** `println(x, ...)` - Outputs x to the console
 
-## Variables and Types
+## Complete Example
 
-### Variable Declaration
-
-```
-let mut name: type = value;
-```
-
-- **`mut` (optional):** Makes the variable mutable so it can be reassigned later
-- **`name` (required):** Variable name. Required for variable referencing
-- **`: type` (optional):** Specifies the data type. If omitted, the type is inferred (works only with literals)
-- **`value` (required):** All variable declarations must include an initial value or expression
-
-### Available Data Types
-
-- **Integer:** `int` - 64-bit integer
-- **Float:** `float` - 64-bit floating-point number
-- **String:** `string` - Text data
-- **Boolean:** `bool` - Boolean value (true/false)
-
-**Note:** `null` and `any` types exist but cannot be used for variable initialization.
-
-### Variable Assignment
-
-- **Assignment:** `x = y;` - Reassign an existing variable to a new value (variable must be declared as `mut` and types
-  should match)
-
-## Functions
-
-### Function Declaration
-
-```
-fn name(argument: type, ...) {
-    code
-}
-```
-
-- **`name` (required):** Function name. Required for function calling
-- **`argument: type` (optional):**
-    - **`argument` (required):** Argument name. Required for variable referencing
-    - **`: type` (required):** Specifies the data type. Can't be omitted
-- **`...` (optional):** There can be unlimited amount of arguments separated by comma
-- **`{ code }` (required):** Code which will be executed at function call
-
-### Comments
-
-- **Comments:** `// Comment` - Comments like anywhere else. Nothing special.
-
-## Code example
-
-```
+```morsel
 fn add(x: float, y: float) {
     x + y // Function returns last expression result
 }
@@ -208,26 +232,40 @@ fn add(x: float, y: float) {
 // Any program must have entry point (main)
 fn main() {
     // Declare some variables
-    // You can provide explicit type annotation
-    let first: int = 1;
-    // But they're initialed with literal so you can omit that
+    // You can provide explicit type annotation, but they're initialized with a literal so you can omit that
+    let first = 1;
     let second = 2;
 
-    // Declare mutable (editable) variable
-    let mut result = 0;
-
+    // Explicit annotation required because var initialized not with a literal
+    let result: int = add(first, second);
     // There is implicit conversion:
     // Arguments 'x' and 'y' are floats so function returns float
     // But return value can be converted without loss of precision
     // Also 'first' and 'second' are integers, but they're converted to floats
-    result = add(first, second);
 
     // Display result
-    println(result);
+    println("Result:", result);
 }
 ```
 
 ## Project Structure
+
+#### Pipeline
+
+**Morsel** evaluates expressions through a three-stage pipeline:
+
+1. **Tokenizer (Lexer)** - Converts input string into tokens
+2. **AST Builder (Parser)** - Builds an Abstract Syntax Tree (AST) from tokens
+3. **Runtime (Executor)** - Executes the AST and returns a result
+
+```
+Input -> [Lexer] -> Tokens -> [Parser] -> AST -> [Executor]
+```
+
+`Interpreter` wraps this pipeline. Use `execute()` to build and execute source code. Enable debug mode to
+see intermediate outputs at each stage.
+
+#### File structure
 
 - **Entry point** (`src/main.rs`) - Launches CLI or evaluates file from argument
 - **Command Line Interface** (`src/cli/`) - User interface that accepts commands and file inputs
@@ -237,6 +275,22 @@ fn main() {
     - **AST Builder** (`src/morsel_core/parser/`) - Builds an Abstract Syntax Tree from tokens
     - **Environment** (`src/morsel_core/environment/`) - Manages scopes, variables and function tables
     - **Executor** (`src/morsel_core/runtime/`) - Executes AST
+
+## Roadmap
+
+- [x] Math expressions (x+y, x*y)
+- [x] Built-in math library (sin(), round())
+- [x] Variables and scopes
+- [x] Type safety
+- [x] Type casting
+- [x] Functions
+- [ ] Built-in std library (print(), input())
+- [ ] Control flow (if/else statements, loops, etc)
+- [ ] Arrays and data structures
+- [ ] Imports
+- [ ] Additional standard library functions
+- [ ] Performance optimizations
+- [ ] **First release**
 
 ## Screenshot
 

@@ -1,0 +1,10 @@
+fn add(x: float, y: float) {
+    x + y
+}
+
+fn main() {
+    let first = 1;
+    let second = 2;
+    let result: int = add(first, second);
+    println("Result:", result);
+}
