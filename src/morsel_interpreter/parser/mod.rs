@@ -2,3 +2,4 @@
 
 pub mod ast_node;
 pub mod builder;
+pub mod type_inference;

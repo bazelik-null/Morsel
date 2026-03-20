@@ -1,32 +1,45 @@
 // Copyright (c) 2026 bazelik-null
 
+use crate::morsel_interpreter::environment::symbol_table::function_symbol::{
+    FunctionParamSymbol, FunctionSymbol,
+};
+use crate::morsel_interpreter::environment::symbol_table::variable_symbol::VariableSymbol;
+use crate::morsel_interpreter::environment::symbol_table::SymbolTable;
 use crate::morsel_interpreter::environment::types::Type;
-use crate::morsel_interpreter::environment::variable::Value;
+use crate::morsel_interpreter::environment::value::Value;
 use crate::morsel_interpreter::lexer::syntax_operator::{Precedence, SyntaxOperator};
 use crate::morsel_interpreter::lexer::token::{LiteralValue, Token};
 use crate::morsel_interpreter::parser::ast_node::Node;
 
 pub struct AstBuilder {
+    pub(crate) symbol_table: SymbolTable,
     tokens: Vec<Token>,
     pos: usize,
 }
 
 impl AstBuilder {
-    pub fn new(tokens: Vec<Token>) -> Self {
-        Self { tokens, pos: 0 }
+    pub fn new(symbol_table: SymbolTable, tokens: Vec<Token>) -> Self {
+        Self {
+            symbol_table,
+            tokens,
+            pos: 0,
+        }
     }
 
-    /// Entry point for parser. Parses all statements and returns a single AST root.
-    /// Also parses functions.
-    pub fn parse(&mut self) -> Result<Node, String> {
+    /// Entry point for parser. Parses all statements and returns symbol table with main function.
+    pub fn build(mut self) -> Result<SymbolTable, String> {
+        self.parse_block()?;
+        Ok(self.symbol_table)
+    }
+
+    /// Parses function and builds a single block.
+    fn parse_block(&mut self) -> Result<Node, String> {
         let mut statements = Vec::new();
 
-        // Parse all statements
         while self.pos < self.tokens.len() && !self.peek_curly() {
             statements.push(self.parse_statement()?);
         }
 
-        // Wrap all statements into a root block
         Ok(Node::Block(statements))
     }
 
@@ -43,38 +56,23 @@ impl AstBuilder {
         };
 
         self.consume_semicolon();
-
         Ok(node)
     }
 
-    /// Parse let binding with optional type annotation and type inference
+    /// Parse let binding with optional mutability and type annotation.
     fn parse_let_binding(&mut self) -> Result<Node, String> {
         self.advance(); // consume 'let'
 
         // Check for mutability
-        let mutability = if self.peek_keyword("mut") {
-            self.advance();
-            true
-        } else {
-            false
-        };
+        let mutability = self.consume_keyword("mut");
 
         // Get variable name
-        let name = match self.peek() {
-            Some(Token::Identifier(n)) => {
-                let name = n.clone();
-                self.advance();
-                name
-            }
-            _ => {
-                return Err(format!("Expected identifier after 'let' at {}", self.pos));
-            }
-        };
+        let name = self.parse_identifier("let")?;
 
-        // Get type (if explicit)
-        let type_annotation = self.get_explicit_type(name.as_str())?;
+        // Get type annotation (if explicit)
+        let type_annotation = self.get_explicit_type(&name)?;
 
-        // Get assigment
+        // Get assignment
         self.expect_operator(SyntaxOperator::Assign)?;
         let value = Box::new(self.parse_expression()?);
 
@@ -84,89 +82,123 @@ impl AstBuilder {
             None => self.infer_type_from_node(&value)?,
         };
 
-        // Build node
-        Ok(Node::LetBinding {
-            name,
+        // Register in symbol table
+        let var_symbol = VariableSymbol::new(
+            name.clone(),
+            final_type_annotation,
             mutability,
+            self.symbol_table.depth(),
+        );
+        self.symbol_table.variables.define(var_symbol)?;
+
+        Ok(Node::LetBinding {
+            reference: name,
             value,
             type_annotation: final_type_annotation,
         })
     }
 
-    /// Parse function binding
+    /// Parse function binding with parameters and implementation.
     fn parse_func_binding(&mut self) -> Result<Node, String> {
         self.advance(); // consume 'fn'
 
-        // Get function name
-        let name = match self.peek() {
-            Some(Token::Identifier(n)) => {
-                let name = n.clone();
-                self.advance();
-                name
-            }
-            _ => {
-                return Err(format!("Expected identifier after 'fn' at {}", self.pos));
-            }
-        };
+        let name = self.parse_identifier("fn")?;
 
-        // Check for parenthesis and parse arguments inside them
+        // Parse arguments
         self.expect_operator(SyntaxOperator::LParen)?;
         let args = self.parse_func_arguments()?;
         self.expect_operator(SyntaxOperator::RParen)?;
 
-        // Parse all statements inside
+        // Get explicit return type
+        let explicit_type = self.get_explicit_type(&name)?;
+
+        // Extract parameter symbols from parsed arguments
+        let param_symbols = self.extract_param_symbols(&args);
+
+        let definition_depth = self.symbol_table.depth();
+
+        // Push scope and register parameters
+        self.symbol_table.push_scope();
+        self.register_func_parameters(&args)?;
+
+        // Parse implementation
         self.expect_operator(SyntaxOperator::CurlyLParen)?;
-        let implementation = Box::new(self.parse()?);
+        let implementation = Box::new(self.parse_block()?);
         self.expect_operator(SyntaxOperator::CurlyRParen)?;
 
-        // Build node
-        Ok(Node::FuncBinding {
-            name,
-            args,
-            implementation,
-        })
+        // Infer and validate return type
+        let inferred_return_type = self.infer_type_from_node(&implementation)?;
+        let return_type = self.validate_return_type(&name, explicit_type, inferred_return_type)?;
+
+        self.symbol_table.pop_scope();
+
+        // Register function
+        let func_symbol = FunctionSymbol::new(
+            name.clone(),
+            param_symbols,
+            return_type,
+            definition_depth,
+            Some(implementation.clone()),
+        );
+        self.symbol_table.functions.define(func_symbol)?;
+
+        Ok(Node::FuncBinding())
     }
 
-    /// Parse assignments
+    /// Parse assignment statement with type validation.
     fn parse_assignment(&mut self) -> Result<Node, String> {
-        let name = match self.peek() {
-            Some(Token::Identifier(n)) => n.clone(),
-            _ => {
-                return Err(format!(
-                    "Expected identifier for assignment at {}",
-                    self.pos
-                ));
-            }
-        };
+        // Parse identifier
+        let name = self.parse_identifier("assignment")?;
 
+        // Look up variable and validate mutability
+        let var = self
+            .symbol_table
+            .variables
+            .lookup(&name)
+            .ok_or_else(|| format!("Undefined variable: '{}'", name))?
+            .clone();
+
+        if !var.mutable {
+            return Err(format!("Cannot assign to immutable variable '{}'", name));
+        }
+
+        // Advance past '='
         self.advance();
-        self.expect_operator(SyntaxOperator::Assign)?;
+
+        // Parse the right-hand side expression
         let value = Box::new(self.parse_expression()?);
 
-        // Build node
+        // Validate type compatibility
+        let value_type = self.infer_type_from_node(&value)?;
+        if value_type != var.type_annotation {
+            return Err(format!(
+                "Type mismatch in assignment to '{}': expected {}, got {}",
+                name, var.type_annotation, value_type
+            ));
+        }
+
         Ok(Node::Assignment { name, value })
     }
 
-    /// Check if current position is an assignment (identifier followed by =)
+    /// Check if current position is an assignment (identifier followed by =).
     fn is_assignment(&self) -> bool {
         matches!(self.peek(), Some(Token::Identifier(_)))
-            && self.tokens.get(self.pos + 1).and_then(|t| t.as_operator())
-                == Some(&SyntaxOperator::Assign)
+            && matches!(
+                self.tokens.get(self.pos + 1).and_then(|t| t.as_operator()),
+                Some(&SyntaxOperator::Assign)
+            )
     }
 
-    /// Parse an expression with operator precedence
+    /// Parse an expression with operator precedence.
     fn parse_expression(&mut self) -> Result<Node, String> {
         self.parse_precedence(Precedence::Additive)
     }
 
-    /// Precedence climbing algorithm for binary operators
+    /// Precedence climbing algorithm for binary operators.
     fn parse_precedence(&mut self, min_precedence: Precedence) -> Result<Node, String> {
-        // Parse left value
         let mut left = self.parse_primary()?;
 
-        // Parse binary operators as long as they have sufficient precedence
         while let Some(op) = self.peek_operator() {
-            // Get the precedence of the current operator, or stop if it's not a binary operator
             let Some(precedence) = op.precedence() else {
                 break;
             };
@@ -175,20 +207,17 @@ impl AstBuilder {
                 break;
             }
 
-            // Consume operator
             self.advance();
 
-            // Determine the minimum precedence for the right operand
+            // Determine minimum precedence for right operand based on associativity
             let next_min = if op.is_right_associative() {
                 precedence
             } else {
                 precedence.next_higher()
             };
 
-            // Parse right operands with calculated minimum precedence
             let right = self.parse_precedence(next_min)?;
 
-            // Build node
             left = Node::Call {
                 name: op.to_string(),
                 args: vec![left, right],
@@ -198,7 +227,7 @@ impl AstBuilder {
         Ok(left)
     }
 
-    /// Parse primary expression: unary operator or atom
+    /// Parse primary expression: unary operator or atom.
     fn parse_primary(&mut self) -> Result<Node, String> {
         if let Some(op) = self.peek_operator()
             && op.is_unary()
@@ -209,71 +238,52 @@ impl AstBuilder {
         self.parse_atom()
     }
 
-    /// Parse comma-separated argument list
+    /// Parse comma-separated list of expressions (for function calls).
     fn parse_arguments(&mut self) -> Result<Vec<Node>, String> {
-        if self.peek_operator() == Some(SyntaxOperator::RParen) {
-            return Ok(Vec::new());
-        }
-
-        let mut args = vec![self.parse_expression()?];
-
-        while self.peek_operator() == Some(SyntaxOperator::Comma) {
-            // Consume comma
-            self.advance();
-
-            // Parse argument
-            args.push(self.parse_expression()?);
-        }
-
-        Ok(args)
+        self.parse_comma_separated_list(Self::parse_expression)
     }
 
-    /// Parse comma-separated list of function parameters (without let keyword)
+    /// Parse comma-separated list of function parameters.
     fn parse_func_arguments(&mut self) -> Result<Vec<Node>, String> {
+        self.parse_comma_separated_list(Self::parse_func_parameter)
+    }
+
+    /// Parse comma-separated lists with custom parser.
+    fn parse_comma_separated_list<F>(&mut self, parser: F) -> Result<Vec<Node>, String>
+    where
+        F: Fn(&mut Self) -> Result<Node, String>,
+    {
         if self.peek_operator() == Some(SyntaxOperator::RParen) {
             return Ok(Vec::new());
         }
 
-        let mut args = vec![self.parse_func_parameter()?];
+        let mut items = vec![parser(self)?];
 
         while self.peek_operator() == Some(SyntaxOperator::Comma) {
-            // Consume comma
-            self.advance();
-
-            // Parse parameter
-            args.push(self.parse_func_parameter()?);
+            self.advance(); // consume comma
+            items.push(parser(self)?);
         }
 
-        Ok(args)
+        Ok(items)
     }
 
-    /// Parse a single function parameter: 'name: type'
+    /// Parse a single function parameter: 'name: type'.
     fn parse_func_parameter(&mut self) -> Result<Node, String> {
-        // Get parameter name
-        let name = match self.peek() {
-            Some(Token::Identifier(n)) => {
-                let name = n.clone();
-                self.advance();
-                name
-            }
-            _ => {
-                return Err(format!("Expected parameter name at position {}", self.pos));
-            }
-        };
+        let name = self.parse_identifier("parameter")?;
 
-        // Get type annotation (required)
-        let type_annotation = match self.get_explicit_type(name.as_str())? {
+        // Type annotation is required for parameters
+        let type_annotation = match self.get_explicit_type(&name)? {
             Some(t) => t,
-            None => Err(format!(
-                "Expected parameter type annotation at {}",
-                self.pos
-            ))?,
+            None => {
+                return Err(format!(
+                    "Expected parameter type annotation at {}",
+                    self.pos
+                ));
+            }
         };
 
-        // Build node without initialization
         Ok(Node::LetBinding {
-            name,
-            mutability: false,
+            reference: name,
             value: Box::new(Node::Literal(Value::Null)),
             type_annotation,
         })
@@ -281,61 +291,69 @@ impl AstBuilder {
 
     /// Parse unary operator: -x, !x, etc.
     fn parse_unary(&mut self, op: SyntaxOperator) -> Result<Node, String> {
-        // Consume unary operator
         self.advance();
-
-        // Parse child
         let child = self.parse_primary()?;
 
-        // Build node
         Ok(Node::Call {
             name: op.to_string(),
             args: vec![child],
         })
     }
 
-    /// Parse atomic expression: number, variable, parenthesized expression, function call
+    /// Parse atomic expression: literal, variable, parenthesized expression, or function call.
     fn parse_atom(&mut self) -> Result<Node, String> {
         match self.peek() {
-            // Parse literal
             Some(Token::Literal(value)) => {
-                let value_node = match value {
-                    LiteralValue::Integer(value) => Node::Literal(Value::Integer(*value)),
-                    LiteralValue::Float(value) => Node::Literal(Value::Float(*value)),
-                    LiteralValue::String(value) => Node::Literal(Value::String(value.clone())),
-                    LiteralValue::Boolean(value) => Node::Literal(Value::Boolean(*value)),
+                let node = match value {
+                    LiteralValue::Integer(v) => Node::Literal(Value::Integer(*v)),
+                    LiteralValue::Float(v) => Node::Literal(Value::Float(*v)),
+                    LiteralValue::String(v) => Node::Literal(Value::String(v.clone())),
+                    LiteralValue::Boolean(v) => Node::Literal(Value::Boolean(*v)),
                 };
-
                 self.advance();
-                Ok(value_node)
+                Ok(node)
             }
 
-            // Parse variable reference or function call
             Some(Token::Identifier(name)) => {
                 let name = name.clone();
                 self.advance();
 
-                // Check if followed by '(' for function call
+                // Check for function call
                 if self.peek_operator() == Some(SyntaxOperator::LParen) {
                     self.advance(); // consume '('
                     let args = self.parse_arguments()?;
                     self.expect_operator(SyntaxOperator::RParen)?;
+
+                    // Validate function call
+                    let arg_types: Vec<Type> = args
+                        .iter()
+                        .map(|node| self.infer_type_from_node(node))
+                        .collect::<Result<Vec<_>, String>>()?;
+
+                    self.symbol_table
+                        .functions
+                        .validate_arg_count(&name, args.len())?;
+                    self.symbol_table
+                        .functions
+                        .validate_param_types(&name, &arg_types)?;
+
                     Ok(Node::Call { name, args })
                 } else {
+                    // Variable reference
+                    if !self.symbol_table.variables.exists(&name) {
+                        return Err(format!(
+                            "Variable '{}' is not defined at {}",
+                            name, self.pos
+                        ));
+                    }
                     Ok(Node::Reference(name))
                 }
             }
 
-            // Parse parenthesis
             Some(Token::SyntaxToken(SyntaxOperator::LParen)) => {
-                // Consume '('
-                self.advance();
-
-                // Parse expression inside
+                self.advance(); // consume '('
                 let expr = self.parse_expression()?;
-                // Check for ')'
                 self.expect_operator(SyntaxOperator::RParen)?;
-
                 Ok(expr)
             }
 
@@ -343,60 +361,108 @@ impl AstBuilder {
         }
     }
 
-    /// Infer type from a node. Returns error if type cannot be inferred.
-    fn infer_type_from_node(&self, node: &Node) -> Result<Type, String> {
-        match node {
-            Node::Literal(val) => match val {
-                Value::Integer(_) => Ok(Type::Integer),
-                Value::Float(_) => Ok(Type::Float),
-                Value::String(_) => Ok(Type::String),
-                Value::Boolean(_) => Ok(Type::Boolean),
-                Value::Null => Ok(Type::Null),
-            },
-            Node::Reference(_) => Err(format!(
-                "Cannot infer type from variable reference. Please provide explicit type annotation at {}.",
-                self.pos
-            )),
-            Node::Call { name, args: _args } => Err(format!(
-                "Cannot infer type from expression '{}'. Please provide explicit type annotation at {}.",
-                name, self.pos
-            )),
-            Node::LetBinding { .. } => Err(format!(
-                "Cannot infer type from nested statement. Please provide explicit type annotation at {}.",
-                self.pos
-            )),
-            Node::FuncBinding { .. } => Err(format!(
-                "Cannot infer type from nested statement. Please provide explicit type annotation at {}.",
-                self.pos
-            )),
-            Node::Assignment { .. } => Err(format!(
-                "Cannot infer type from assignment. Please provide explicit type annotation at {}.",
-                self.pos
-            )),
-            Node::Block(_) => Err(format!(
-                "Cannot infer type from block. Please provide explicit type annotation at {}.",
-                self.pos
+    /// Parse an identifier token and advance position.
+    fn parse_identifier(&mut self, context: &str) -> Result<String, String> {
+        match self.peek() {
+            Some(Token::Identifier(n)) => {
+                let name = n.clone();
+                self.advance();
+                Ok(name)
+            }
+            _ => Err(format!(
+                "Expected identifier in {} at {}",
+                context, self.pos
             )),
         }
     }
 
+    /// Consume keyword if present and return success status.
+    fn consume_keyword(&mut self, keyword: &str) -> bool {
+        if self.peek_keyword(keyword) {
+            self.advance();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Extract parameter symbols from parsed function arguments.
+    fn extract_param_symbols(&self, args: &[Node]) -> Vec<FunctionParamSymbol> {
+        args.iter()
+            .filter_map(|arg| {
+                if let Node::LetBinding {
+                    reference: name,
+                    type_annotation,
+                    ..
+                } = arg
+                {
+                    Some(FunctionParamSymbol::new(name.clone(), *type_annotation))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    /// Register function parameters as variables in the current scope.
+    fn register_func_parameters(&mut self, args: &[Node]) -> Result<(), String> {
+        for arg in args {
+            if let Node::LetBinding {
+                reference: name,
+                type_annotation,
+                ..
+            } = arg
+            {
+                let var_symbol = VariableSymbol::new(
+                    name.clone(),
+                    *type_annotation,
+                    false,
+                    self.symbol_table.depth(),
+                );
+                self.symbol_table.variables.define(var_symbol)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Validate return type matches explicit annotation or use inferred type.
+    fn validate_return_type(
+        &self,
+        func_name: &str,
+        explicit_type: Option<Type>,
+        inferred_type: Type,
+    ) -> Result<Type, String> {
+        match explicit_type {
+            Some(t) => {
+                // Validate explicit type matches inferred type
+                if t != inferred_type {
+                    return Err(format!(
+                        "Return type mismatch in function '{}': declared {}, but body returns {}",
+                        func_name, t, inferred_type
+                    ));
+                }
+                Ok(t)
+            }
+            None => Ok(inferred_type),
+        }
+    }
+
+    /// Expect a specific operator and advance if found.
     fn expect_operator(&mut self, expected: SyntaxOperator) -> Result<(), String> {
         match self.peek_operator() {
             Some(op) if op == expected => {
                 self.advance();
                 Ok(())
             }
-
             Some(op) => Err(format!(
                 "Expected '{}', found '{}' at position {}",
                 expected, op, self.pos
             )),
-
             None => Err(format!("Expected '{}', found end of input", expected)),
         }
     }
 
-    /// Try to parse explicit type annotation (only if colon is present)
+    /// Parse explicit type annotation if colon is present.
     fn get_explicit_type(&mut self, name: &str) -> Result<Option<Type>, String> {
         if self.peek_operator() == Some(SyntaxOperator::Colon) {
             self.advance(); // consume ':'
@@ -408,50 +474,54 @@ impl AstBuilder {
                     Ok(Some(type_annotation))
                 }
                 _ => Err(format!(
-                    "Expected type after ':' in 'let {}' at {}",
+                    "Expected type after ':' for '{}' at {}",
                     name, self.pos
                 )),
             }
         } else {
-            // No colon, so no explicit type annotation
             Ok(None)
         }
     }
 
+    /// Consume semicolon if present.
     fn consume_semicolon(&mut self) {
         if self.peek_operator() == Some(SyntaxOperator::Semicolon) {
             self.advance();
         }
     }
 
-    /// Returns true if the next operator is curly brace ('}')
-    fn peek_curly(&mut self) -> bool {
+    /// Check if next operator is closing curly brace.
+    fn peek_curly(&self) -> bool {
         matches!(self.peek_operator(), Some(SyntaxOperator::CurlyRParen))
     }
 
+    /// Generate error for unexpected token.
     fn error_unexpected_token(&self) -> Result<Node, String> {
         match self.peek() {
             Some(token) => Err(format!(
                 "Unexpected token at position {}: {:?}",
                 self.pos, token
             )),
-
             None => Err("Unexpected end of input".to_string()),
         }
     }
 
+    /// Get token at current position.
     fn peek(&self) -> Option<&Token> {
         self.tokens.get(self.pos)
     }
 
+    /// Get operator from current token if available.
     fn peek_operator(&self) -> Option<SyntaxOperator> {
         self.peek().and_then(|t| t.as_operator().cloned())
     }
 
+    /// Check if current token is a specific keyword.
     fn peek_keyword(&self, keyword: &str) -> bool {
         matches!(self.peek(), Some(Token::Keyword(kw)) if kw == keyword)
     }
 
+    /// Move to next token.
     fn advance(&mut self) {
         self.pos += 1;
     }

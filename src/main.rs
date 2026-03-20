@@ -1,5 +1,7 @@
 // Copyright (c) 2026 bazelik-null
 
+extern crate core;
+
 pub mod cli;
 pub mod morsel_interpreter;
 mod tests;

@@ -203,7 +203,7 @@ fn test_mixed_int_float_arithmetic() {
 
 #[test]
 fn test_variable_with_sqrt_function() {
-    let code = "fn main() { let mut x: float = sqrt(25); }";
+    let code = "fn main() { let x: float = sqrt(25); }";
     assert!(cli_execute(code, false).is_ok());
 }
 

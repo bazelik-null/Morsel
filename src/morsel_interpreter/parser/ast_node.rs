@@ -1,7 +1,7 @@
 // Copyright (c) 2026 bazelik-null
 
 use crate::morsel_interpreter::environment::types::Type;
-use crate::morsel_interpreter::environment::variable::Value;
+use crate::morsel_interpreter::environment::value::Value;
 use std::fmt;
 
 #[derive(Debug, Clone)]
@@ -17,20 +17,15 @@ pub enum Node {
         args: Vec<Node>, // [left, right] for binary, [child] for unary
     },
 
-    // Variable binding
+    // Variable binding. Initializes variable
     LetBinding {
-        name: String,
-        mutability: bool,
+        reference: String,
         value: Box<Node>,
         type_annotation: Type,
     },
 
     // Function binding
-    FuncBinding {
-        name: String,
-        args: Vec<Node>,           // Should be LetBinding
-        implementation: Box<Node>, // Should be Block
-    },
+    FuncBinding(),
 
     // Assignment (x = y)
     Assignment {
@@ -55,9 +50,9 @@ impl Node {
             Node::Block(statements) => statements.iter().collect(),
             Node::Literal(_) | Node::Reference(_) => vec![],
             Node::LetBinding { value, .. } => vec![value.as_ref()],
-            Node::FuncBinding { implementation, .. } => vec![implementation.as_ref()],
             Node::Assignment { value, .. } => vec![value.as_ref()],
             Node::Call { args, .. } => args.iter().collect(),
+            Node::FuncBinding() => vec![],
         }
     }
 
@@ -78,16 +73,9 @@ impl Node {
                 format!("Variable({})", name)
             }
             Node::LetBinding {
-                name, mutability, ..
+                reference: name, ..
             } => {
-                if *mutability {
-                    format!("Let({}) [mut]", name)
-                } else {
-                    format!("Let({})", name)
-                }
-            }
-            Node::FuncBinding { name, .. } => {
-                format!("Func({})", name)
+                format!("Let({})", name)
             }
             Node::Assignment { name, .. } => {
                 format!("Assign({})", name)
@@ -95,6 +83,7 @@ impl Node {
             Node::Call { name, .. } => {
                 format!("Call({})", name)
             }
+            Node::FuncBinding() => "Fn()".to_string(),
         }
     }
 

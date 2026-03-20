@@ -2,24 +2,6 @@
 
 use crate::morsel_interpreter::environment::types::Type;
 
-/// Represents a single variable
-#[derive(Clone)]
-pub struct Variable {
-    pub value: Value,
-    pub var_type: Type,
-    pub mutable: bool,
-}
-
-impl Variable {
-    pub fn new(value: Value, var_type: Type, mutable: bool) -> Self {
-        Variable {
-            value,
-            var_type,
-            mutable,
-        }
-    }
-}
-
 /// Represents any value in the language
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
@@ -104,38 +86,6 @@ impl Value {
     /// Check if this value is falsy
     pub fn is_falsy(&self) -> bool {
         !self.is_truthy() // Yeah
-    }
-
-    /// Convert value to expected type if compatible
-    pub fn implicit_conversion(&self, value: Value, target_type: Type) -> Result<Value, String> {
-        let actual_type = Type::of(&value);
-
-        if actual_type == target_type {
-            return Ok(value);
-        }
-
-        match (target_type, &value) {
-            (Type::Integer, Value::Float(f)) => {
-                if f.is_finite()
-                    && *f == f.trunc()
-                    && *f >= i64::MIN as f64
-                    && *f <= i64::MAX as f64
-                {
-                    Ok(Value::Integer(*f as i64))
-                } else {
-                    Err(format!(
-                        "Implicit conversion error: Cannot convert float {} to int without loss of precision.",
-                        f
-                    ))
-                }
-            }
-            (Type::Float, Value::Integer(i)) => Ok(Value::Float(*i as f64)),
-            (Type::String, _) => Ok(Value::String(value.display())),
-            _ => Err(format!(
-                "Implicit conversion error: Type mismatch: expected {}, got {}",
-                target_type, actual_type
-            )),
-        }
     }
 }
 

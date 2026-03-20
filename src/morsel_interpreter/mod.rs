@@ -9,22 +9,21 @@ pub mod runtime;
 // Interpreter
 //
 
-use crate::morsel_interpreter::environment::functions::FunctionTable;
+use crate::morsel_interpreter::environment::symbol_table::SymbolTable;
 use crate::morsel_interpreter::lexer::token::Token;
 use crate::morsel_interpreter::lexer::tokenizer;
-use crate::morsel_interpreter::parser::ast_node::Node;
 use crate::morsel_interpreter::parser::builder::AstBuilder;
 use crate::morsel_interpreter::runtime::executor::Executor;
 
 pub struct Interpreter {
-    func_table: FunctionTable,
+    symbol_table: SymbolTable,
     debug: bool,
 }
 
 impl Interpreter {
     pub fn new(debug: bool) -> Self {
         Interpreter {
-            func_table: FunctionTable::new(),
+            symbol_table: SymbolTable::new(),
             debug,
         }
     }
@@ -46,14 +45,10 @@ impl Interpreter {
          */
 
         // Parse into AST
-        let ast = self.parse(tokens)?;
-        if self.debug {
-            println!("[DEBUG]: Abstract Syntax Tree:\n {}", ast);
-            println!();
-        }
+        self.symbol_table = self.parse(tokens)?;
 
         // Evaluate AST
-        self.evaluate(&ast)
+        self.evaluate()
     }
 
     /// Tokenize input string into tokens
@@ -62,15 +57,15 @@ impl Interpreter {
     }
 
     /// Parse tokens into an Abstract Syntax Tree
-    fn parse(&self, tokens: Vec<Token>) -> Result<Node, String> {
-        let mut parser = AstBuilder::new(tokens);
-        parser.parse()
+    fn parse(&self, tokens: Vec<Token>) -> Result<SymbolTable, String> {
+        let parser = AstBuilder::new(self.symbol_table.clone(), tokens);
+        parser.build()
     }
 
     /// Evaluate an AST node
-    fn evaluate(&mut self, ast: &Node) -> Result<(), String> {
-        let mut evaluator = Executor::new(&mut self.func_table);
-        evaluator.execute(ast)?;
+    fn evaluate(&mut self) -> Result<(), String> {
+        let mut evaluator = Executor::new(self.symbol_table.clone());
+        evaluator.execute()?;
         Ok(())
     }
 

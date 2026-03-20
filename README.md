@@ -29,14 +29,14 @@ performance and memory safety of Rust with an easy, expression-based syntax insp
 Here's a simple Morsel program:
 
 ```morsel
-fn add(x: float, y: float) {
+fn add(x: int, y: int) {
     x + y
 }
 
 fn main() {
     let first = 1;
     let second = 2;
-    let result: int = add(first, second);
+    let result = add(first, second);
     println("Result:", result);
 }
 ```
@@ -220,28 +220,40 @@ Functions return the value of their last expression implicitly.
 - **Ceiling:** `ceil(x)` - Rounds x up to the nearest integer
 - **Maximum:** `max(x, ...)` - Returns the largest of the given values
 - **Minimum:** `min(x, ...)` - Returns the smallest of the given values
-- **Print:** `println(x, ...)` - Outputs x to the console
+
+#### Type casting
+
+- **To int:** `to_int(x)` - Converts x to int
+- **To float:** `to_float(x)` - Converts x to float
+- **To bool:** `to_bool(x)` - Converts x to bool
+- **To string:** `to_string(x)` - Converts x to string
+
+#### I/O
+
+- **Print:** `print(x, ...)` - Outputs x to the console
+- **Print line:** `println(x, ...)` - Outputs x to the console and appends /n
 
 ## Complete Example
 
 ```morsel
+// Introduction to Language
+// To execute use ./Morsel examples/quickstart.msl
+// Or ./Morsel and "file examples/quickstart.msl"
+
+// You can provide explicit annotation for return type
 fn add(x: float, y: float) {
     x + y // Function returns last expression result
 }
 
-// Any program must have entry point (main)
+// Any program must have an entry point (main)
 fn main() {
     // Declare some variables
-    // You can provide explicit type annotation, but they're initialized with a literal so you can omit that
-    let first = 1;
-    let second = 2;
+    // You can provide explicit type annotation
+    let first = 1.2;
+    let second = 2.2;
 
-    // Explicit annotation required because var initialized not with a literal
-    let result: int = add(first, second);
-    // There is implicit conversion:
-    // Arguments 'x' and 'y' are floats so function returns float
-    // But return value can be converted without loss of precision
-    // Also 'first' and 'second' are integers, but they're converted to floats
+    // You can use cast functions to change types
+    let result: int = to_int(add(first, second));
 
     // Display result
     println("Result:", result);
@@ -255,15 +267,25 @@ fn main() {
 **Morsel** evaluates expressions through a three-stage pipeline:
 
 1. **Tokenizer (Lexer)** - Converts input string into tokens
-2. **AST Builder (Parser)** - Builds an Abstract Syntax Tree (AST) from tokens
-3. **Runtime (Executor)** - Executes the AST and returns a result
+2. **AST Builder (Parser)** - Builds an Abstract Syntax Tree (AST) from tokens and populates a **Symbol Table** with all
+   variable and function definitions, their types, and implementations. Returns only the Symbol Table (AST is embedded
+   within functions implementations).
+3. **Runtime (Executor)** - Executes the program by looking up the `main` function in the Symbol Table and evaluating
+   its implementation
 
 ```
-Input -> [Lexer] -> Tokens -> [Parser] -> AST -> [Executor]
+Input -> [Lexer] -> Tokens -> [Parser] -> SymbolTable -> [Executor] -> Result
 ```
 
-`Interpreter` wraps this pipeline. Use `execute()` to build and execute source code. Enable debug mode to
-see intermediate outputs at each stage.
+**Symbol Table** is a data structure that tracks all defined variables and functions:
+
+- **Parser** populates it during AST construction, storing function implementations as AST nodes within the Symbol Table
+  itself
+- **Executor** uses it at runtime to resolve and execute the `main` function, manage variable scopes, and evaluate
+  function calls
+
+`Interpreter` wraps this pipeline. Use `execute()` to build and execute source code. Enable debug mode to see
+intermediate outputs at each stage.
 
 #### File structure
 
@@ -273,7 +295,8 @@ see intermediate outputs at each stage.
     - **Interpreter** (`src/morsel_core/mod.rs`) - Wrapper for easy code execution
     - **Tokenizer** (`src/morsel_core/lexer/`) - Tokenizes input string into an array of tokens
     - **AST Builder** (`src/morsel_core/parser/`) - Builds an Abstract Syntax Tree from tokens
-    - **Environment** (`src/morsel_core/environment/`) - Manages scopes, variables and function tables
+    - **Environment** (`src/morsel_core/environment/`) - Stores variable and types definitions.
+        - **Symbol table** (`src/morsel_core/environment/symbol_table/`) - Manages scopes, variables and function tables
     - **Executor** (`src/morsel_core/runtime/`) - Executes AST
 
 ## Roadmap

@@ -2,7 +2,8 @@
 // To execute use ./Morsel examples/functions.msl
 // Or ./Morsel and "file examples/functions.msl"
 
-fn add(x: int, y: int) {
+// You can provide explicit type annotation
+fn add(x: int, y: int): int {
     x + y
 }
 
@@ -28,10 +29,10 @@ fn main() {
     println("A function takes some data as input, the code inside the function does something with the data, and then the result is returned.\n");
 
     println("== Simple Functions ==");
-    let result1: int = add(5, 3);
+    let result1 = add(5, 3);
     println("5 + 3 =", result1);
 
-    let result2: int = add(10, 20);
+    let result2 = add(10, 20);
     println("10 + 20 =", result2);
 
     println("\n== Functions Make Code Reusable ==");
@@ -40,20 +41,20 @@ fn main() {
     greet("Charlie");
 
     println("\n== Functions with Multiple Parameters ==");
-    let largest: int = max_of_three(15, 42, 8);
+    let largest = max_of_three(15, 42, 8);
     println("Largest of 15, 42, 8 is:", largest);
 
     println("\n== Functions that Return Values ==");
-    let area: int = rectangle_area(10, 5);
+    let area = rectangle_area(10, 5);
     println("Area of 10 x 5 rectangle:", area);
     println("Area of 7 x 3 rectangle:", rectangle_area(7, 3));
 
     println("\n== A Practical Example ==");
     let temp_c = 25.0;
-    let temp_f: float = celsius_to_fahrenheit(temp_c);
+    let temp_f = celsius_to_fahrenheit(temp_c);
     println(temp_c, "°C is", temp_f, "°F");
 
-    let another_temp: float = celsius_to_fahrenheit(0.0);
+    let another_temp = celsius_to_fahrenheit(0.0);
     println("0°C is", another_temp, "°F");
 
     println("\n== The main() Function ==");

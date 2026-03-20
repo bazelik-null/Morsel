@@ -19,7 +19,7 @@ fn main() {
     println("You don't always need to write the type. Morsel figures it out!\n")
 
     // Morsel automatically detects the type from the value
-    let count = 11;           // This is an int
+    let count = 10 + 11;      // This is an int
     let temperature = 24.6;   // This is a float
     let nickname = "Bazelik"; // This is a string
     let isRaining = false;    // This is a bool
@@ -28,9 +28,6 @@ fn main() {
     println("temperature:", temperature);
     println("nickname:", nickname);
     println("isRaining:", isRaining);
-
-    // But it works only with literals
-    // let double_count = count * 2; // [ERROR]: Cannot infer type from expression '+'. Please provide explicit type annotation at {}.
 
 
     println("\n== Changing Variables ==")
@@ -57,7 +54,7 @@ fn main() {
 
     let apples = 5;
     let oranges = 3;
-    let total_fruit: int = apples + oranges;
+    let total_fruit = apples + oranges;
 
     println("Apples:", apples);
     println("Oranges:", oranges);
@@ -69,8 +66,11 @@ fn main() {
     println("Radius:", radius);
     println("Area:", area);
 
-    println("\nThis looks bad. We should round it!");
+    println("\nBut i need it as int!");
     area = round(area); // Rounding functions can return any numeric type
 
-    println("Area rounded:", area);
+    // We can use 'to_type' to cast variables to another type.
+    let area_int: int = to_int(area);
+
+    println("Area int:", area_int);
 }

@@ -81,8 +81,8 @@
     "functions": {
       "patterns": [
         {
-          "name": "support.function.math.morsel",
-          "match": "\\b(sqrt|cbrt|root|log|ln|cos|sin|tan|acos|asin|atan|abs|round|floor|ceil|max|min|println)\\b"
+          "name": "entity.name.function.builtin.morsel",
+          "match": "\\b(sqrt|cbrt|root|log|ln|cos|sin|tan|acos|asin|atan|abs|round|floor|ceil|max|min|println|print|to_int|to_float|to_bool|to_string)\\b"
         },
         {
           "name": "entity.name.function.morsel",
