@@ -1,32 +1,37 @@
 #![allow(clippy::result_unit_err)]
+pub mod analyzer;
 mod expressions;
 mod statements;
+pub mod symbol;
 pub mod tree;
-
+pub mod type_inference;
 //
 // Parser core
 //
 
 use crate::core::compiler::error_handler::CompilerError;
+use crate::core::compiler::parser::analyzer::SemanticAnalyzer;
 use crate::core::compiler::parser::tree::ParserOutput;
 use crate::core::compiler::preprocessor::token::{
-	KeywordValue, LexerOutput, OperatorValue, SyntaxValue, Token, TokenType,
+    KeywordValue, LexerOutput, OperatorValue, SyntaxValue, Token, TokenType,
 };
 use crate::core::compiler::source::SourceCode;
-use lasso::Spur;
+use lasso::{Rodeo, Spur};
 
 pub struct Parser<'a> {
     source_code: &'a SourceCode,
+    rodeo: &'a Rodeo,
     tokens: Vec<Token>,
     pos: usize,
     output: ParserOutput,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(lexer_output: LexerOutput, source_code: &'a SourceCode) -> Self {
+    pub fn new(lexer_output: LexerOutput, source_code: &'a SourceCode, rodeo: &'a Rodeo) -> Self {
         let output = ParserOutput::new();
         Self {
             source_code,
+            rodeo,
             tokens: lexer_output.tokens,
             pos: 0,
             output,
@@ -43,6 +48,30 @@ impl<'a> Parser<'a> {
                 }
             }
         }
+
+        // Run semantic analysis
+        let mut analyzer = SemanticAnalyzer::new(self.rodeo);
+        match analyzer.analyze(&mut self.output.nodes) {
+            Ok(()) => {
+                // Semantic analysis passed
+            }
+            Err(semantic_errors) => {
+                // Convert semantic errors to compiler errors
+                for sem_err in semantic_errors {
+                    let compiler_err = CompilerError::new(
+                        sem_err,
+                        "Analyzer".to_string(),
+                        0,
+                        0,
+                        0,
+                        None,
+                        Some(self.source_code.filename.clone()),
+                    );
+                    self.output.errors.push(compiler_err);
+                }
+            }
+        }
+
         self.output
     }
 
@@ -181,10 +210,10 @@ impl<'a> Parser<'a> {
             OperatorValue::Or => (1, 2),
             OperatorValue::And => (3, 4),
             OperatorValue::Equal | OperatorValue::NotEqual => (5, 6),
-            OperatorValue::GreaterThan
-            | OperatorValue::LessThan
-            | OperatorValue::GreaterThanOrEqual
-            | OperatorValue::LessThanOrEqual => (7, 8),
+            OperatorValue::Greater
+            | OperatorValue::Less
+            | OperatorValue::GreaterEqual
+            | OperatorValue::LessEqual => (7, 8),
             OperatorValue::Plus | OperatorValue::Minus => (9, 10),
             OperatorValue::Multiply | OperatorValue::Divide | OperatorValue::Modulo => (11, 12),
             OperatorValue::Power => (14, 13), // Right associative

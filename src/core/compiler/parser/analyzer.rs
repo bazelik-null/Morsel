@@ -1,0 +1,509 @@
+use crate::core::compiler::parser::symbol::{ScopeStack, Symbol};
+use crate::core::compiler::parser::tree::{Node, Type};
+use crate::core::compiler::parser::type_inference::{
+    infer_binary_type, infer_literal_type, infer_unary_type,
+};
+use lasso::{Rodeo, Spur};
+use std::collections::HashMap;
+
+pub struct SemanticAnalyzer<'a> {
+    rodeo: &'a Rodeo,
+    scope_stack: ScopeStack, // Tracks variable visibility across scopes
+    errors: Vec<String>,
+    functions: HashMap<Spur, (Vec<Type>, Option<Type>)>, // Function signatures: (params, return_type)
+    current_return_type: Option<Type>,                   // Expected return type in current function
+    current_function: Option<Spur>, // Track current function name for error context
+}
+
+impl<'a> SemanticAnalyzer<'a> {
+    pub fn new(rodeo: &'a Rodeo) -> Self {
+        Self {
+            rodeo,
+            scope_stack: ScopeStack::new(),
+            errors: Vec::new(),
+            functions: HashMap::new(),
+            current_return_type: None,
+            current_function: None,
+        }
+    }
+
+    pub fn analyze(&mut self, nodes: &mut [Node]) -> Result<(), Vec<String>> {
+        // Gather all function signatures
+        self.collect_all_declarations(nodes);
+
+        // Validate each node
+        nodes.iter_mut().for_each(|n| {
+            let _ = self.analyze_node(n);
+        });
+
+        if self.errors.is_empty() {
+            Ok(())
+        } else {
+            Err(self.errors.clone())
+        }
+    }
+
+    // Recursively collect all function declarations from AST
+    fn collect_all_declarations(&mut self, nodes: &[Node]) {
+        nodes.iter().for_each(|n| self.collect_declarations(n));
+    }
+
+    // Extract function signatures
+    fn collect_declarations(&mut self, node: &Node) {
+        match node {
+            Node::FunctionDecl {
+                name,
+                params,
+                return_type,
+                ..
+            } => {
+                let param_types = params.iter().map(|p| p.type_annotation.clone()).collect();
+                self.functions
+                    .insert(*name, (param_types, return_type.clone()));
+            }
+
+            // Recurse into blocks to find nested functions
+            Node::Block(nodes) => nodes.iter().for_each(|n| self.collect_declarations(n)),
+            _ => {}
+        }
+    }
+
+    fn analyze_node(&mut self, node: &mut Node) -> Result<Type, ()> {
+        match node {
+            Node::Literal(lit) => Ok(infer_literal_type(lit)), // Infer from literal value
+            Node::Identifier(name) => self.lookup_identifier(*name), // Look up in scope
+            Node::VariableDecl { .. } => self.analyze_var_decl(node),
+            Node::Assignment { .. } => self.analyze_assignment(node),
+            Node::Binary { .. } => self.analyze_binary(node),
+            Node::Unary { .. } => self.analyze_unary(node),
+            Node::If { .. } => self.analyze_if(node),
+            Node::While { .. } => self.analyze_while(node),
+            Node::Block(nodes) => self.analyze_block(nodes),
+            Node::FunctionDecl { .. } => self.analyze_func_decl(node),
+            Node::FunctionCall { .. } => self.analyze_func_call(node),
+            Node::Return(val) => self.analyze_return(val),
+        }
+    }
+
+    fn lookup_identifier(&mut self, name: Spur) -> Result<Type, ()> {
+        self.scope_stack
+            .lookup(name)
+            .map(|s| s.type_annotation.clone())
+            .ok_or_else(|| {
+                self.error(
+                    format!("Undefined variable: {}", self.resolve_name(&name)),
+                    "lookup_identifier",
+                );
+            })
+    }
+
+    fn analyze_var_decl(&mut self, node: &mut Node) -> Result<Type, ()> {
+        let (name, mutable, type_annotation, value) = match node {
+            Node::VariableDecl {
+                name,
+                mutable,
+                type_annotation,
+                value,
+            } => (name, mutable, type_annotation, value),
+            _ => return Err(()),
+        };
+
+        let value_type = self.analyze_node(value)?; // Get type of assigned value
+
+        // Use annotation if present, else infer from value
+        let declared_type = type_annotation
+            .get_or_insert_with(|| value_type.clone())
+            .clone();
+
+        // Ensure value type matches declared type
+        if !self.types_compatible(&value_type, &declared_type) {
+            self.error(
+                format!(
+                    "Type mismatch: expected {}, got {}",
+                    declared_type, value_type
+                ),
+                "analyze_var_decl",
+            );
+            return Err(());
+        }
+
+        // Add symbol to current scope
+        self.scope_stack.define(Symbol {
+            name: *name,
+            type_annotation: declared_type.clone(),
+            mutable: *mutable,
+            scope_level: self.scope_stack.current_level(),
+        });
+
+        Ok(declared_type)
+    }
+
+    fn analyze_assignment(&mut self, node: &mut Node) -> Result<Type, ()> {
+        let (target, value) = match node {
+            Node::Assignment { target, value } => (target, value),
+            _ => return Err(()),
+        };
+
+        let value_type = self.analyze_node(value)?;
+
+        match target.as_mut() {
+            Node::Identifier(name) => {
+                // Look up target variable
+                let symbol = self.scope_stack.lookup(*name).ok_or_else(|| {
+                    self.error(
+                        format!("Undefined variable: {}", self.resolve_name(name)),
+                        "analyze_assignment",
+                    );
+                })?;
+
+                // Prevent reassignment of immutable variables
+                if !symbol.mutable {
+                    self.error(
+                        format!(
+                            "Cannot assign to immutable variable: {}",
+                            self.resolve_name(name)
+                        ),
+                        "analyze_assignment",
+                    );
+                    return Err(());
+                }
+
+                // Check value type matches variable type
+                if !self.types_compatible(&value_type, &symbol.type_annotation) {
+                    self.error(
+                        format!(
+                            "Type mismatch in assignment: expected {}, got {}",
+                            symbol.type_annotation, value_type
+                        ),
+                        "analyze_assignment",
+                    );
+                    return Err(());
+                }
+
+                Ok(symbol.type_annotation.clone())
+            }
+            _ => {
+                self.error(
+                    "Invalid assignment target".to_string(),
+                    "analyze_assignment",
+                );
+                Err(())
+            }
+        }
+    }
+
+    fn analyze_binary(&mut self, node: &mut Node) -> Result<Type, ()> {
+        let (lhs, op, rhs) = match node {
+            Node::Binary { lhs, op, rhs } => (lhs, op, rhs),
+            _ => return Err(()),
+        };
+
+        let lhs_type = self.analyze_node(lhs)?;
+        let rhs_type = self.analyze_node(rhs)?;
+
+        // Delegate to type inference for operator
+        infer_binary_type(&lhs_type, op, &rhs_type, &mut self.errors)
+    }
+
+    fn analyze_unary(&mut self, node: &mut Node) -> Result<Type, ()> {
+        let (op, rhs) = match node {
+            Node::Unary { op, rhs } => (op, rhs),
+            _ => return Err(()),
+        };
+
+        let rhs_type = self.analyze_node(rhs)?;
+
+        // Delegate to type inference for operator
+        infer_unary_type(op, &rhs_type, &mut self.errors)
+    }
+
+    fn analyze_if(&mut self, node: &mut Node) -> Result<Type, ()> {
+        let (condition, then_branch, else_branch) = match node {
+            Node::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => (condition, then_branch, else_branch),
+            _ => return Err(()),
+        };
+
+        let cond_type = self.analyze_node(condition)?;
+        // Condition must be boolean
+        if cond_type != Type::Boolean {
+            self.error(
+                format!("If condition must be boolean, got {}", cond_type),
+                "analyze_if",
+            );
+            return Err(());
+        }
+
+        // Analyze then branch in new scope
+        self.scope_stack.push();
+        let then_type = self.analyze_node(then_branch)?;
+        self.scope_stack.pop();
+
+        // Analyze else branch (if present) in new scope
+        let else_type = if let Some(else_b) = else_branch {
+            self.scope_stack.push();
+            let t = self.analyze_node(else_b)?;
+            self.scope_stack.pop();
+            Some(t)
+        } else {
+            None
+        };
+
+        // Both branches type must match if both exist
+        match (else_type, then_type.clone()) {
+            (Some(else_t), then_t) => {
+                if self.types_compatible(&else_t, &then_t) {
+                    Ok(then_t)
+                } else {
+                    self.error(
+                        format!(
+                            "If/else branches have incompatible types: {} vs {}",
+                            then_t, else_t
+                        ),
+                        "analyze_if",
+                    );
+                    Err(())
+                }
+            }
+            (None, then_t) => Ok(then_t), // If no else, return then type
+        }
+    }
+
+    fn analyze_while(&mut self, node: &mut Node) -> Result<Type, ()> {
+        let (condition, body) = match node {
+            Node::While { condition, body } => (condition, body),
+            _ => return Err(()),
+        };
+
+        let cond_type = self.analyze_node(condition)?;
+        // Condition must be boolean
+        if cond_type != Type::Boolean {
+            self.error(
+                format!("While condition must be boolean, got {}", cond_type),
+                "analyze_while",
+            );
+            return Err(());
+        }
+
+        // Analyze body in new scope
+        self.scope_stack.push();
+        self.analyze_node(body)?;
+        self.scope_stack.pop();
+
+        Ok(Type::Void) // Loops return void
+    }
+
+    fn analyze_block(&mut self, nodes: &mut [Node]) -> Result<Type, ()> {
+        self.scope_stack.push(); // Enter new scope
+
+        let nodes_len = nodes.len();
+        let mut last_type = Type::Void; // Default to void
+
+        for (i, node) in nodes.iter_mut().enumerate() {
+            let is_last = i == nodes_len - 1;
+
+            if let Ok(t) = self.analyze_node(node) {
+                // Validate last expression matches function return type
+                if is_last && self.current_return_type.is_some() {
+                    let expected = self.current_return_type.as_ref().unwrap();
+                    if !self.types_compatible(&t, expected) {
+                        self.error(
+                            format!(
+                                "Implicit return type mismatch: expected {}, got {}",
+                                expected, t
+                            ),
+                            "analyze_block",
+                        );
+                    }
+                }
+                last_type = t;
+            }
+        }
+
+        self.scope_stack.pop(); // Exit scope
+        Ok(last_type)
+    }
+
+    fn analyze_func_decl(&mut self, node: &mut Node) -> Result<Type, ()> {
+        let (name, params, body, return_type) = match node {
+            Node::FunctionDecl {
+                name,
+                params,
+                body,
+                return_type,
+            } => (name, params, body, return_type),
+            _ => return Err(()),
+        };
+
+        // Save previous context
+        let prev_return = self.current_return_type.clone();
+        let prev_function = self.current_function;
+
+        self.current_return_type = return_type.clone();
+        self.current_function = Some(*name);
+
+        // Enter function scope and define parameters
+        self.scope_stack.push();
+        for param in params {
+            self.scope_stack.define(Symbol {
+                name: param.name,
+                type_annotation: param.type_annotation.clone(),
+                mutable: true,
+                scope_level: self.scope_stack.current_level(),
+            });
+        }
+
+        // Analyze function body
+        let body_type = self.analyze_node(body)?;
+        // Infer return type if not specified
+        if return_type.is_none() {
+            *return_type = Some(body_type.clone());
+        }
+
+        // Validate body type matches declared return type
+        if let Some(expected) = return_type
+            && !self.types_compatible(&body_type, expected)
+        {
+            self.error(
+                format!(
+                    "Function return type mismatch: expected {}, got {}",
+                    expected, body_type
+                ),
+                "analyze_func_decl",
+            );
+        }
+
+        self.scope_stack.pop(); // Exit function scope
+        self.current_return_type = prev_return; // Restore previous context
+        self.current_function = prev_function;
+
+        Ok(Type::Void)
+    }
+
+    fn analyze_func_call(&mut self, node: &mut Node) -> Result<Type, ()> {
+        let (name, args) = match node {
+            Node::FunctionCall { name, args } => (name, args),
+            _ => return Err(()),
+        };
+
+        // Extract function name identifier
+        let func_name = match name.as_ref() {
+            Node::Identifier(spur) => *spur,
+            _ => {
+                self.error(
+                    "Function name must be an identifier".to_string(),
+                    "analyze_func_call",
+                );
+                return Err(());
+            }
+        };
+
+        // Look up function signature
+        let (param_types, return_type) =
+            self.functions.get(&func_name).cloned().ok_or_else(|| {
+                self.error(
+                    format!("Undefined function: {}", self.resolve_name(&func_name)),
+                    "analyze_func_call",
+                );
+            })?;
+
+        // Check argument count matches parameter count
+        if args.len() != param_types.len() {
+            self.error(
+                format!(
+                    "Function {} expects {} arguments, got {}",
+                    self.resolve_name(&func_name),
+                    param_types.len(),
+                    args.len()
+                ),
+                "analyze_func_call",
+            );
+            return Err(());
+        }
+
+        // Validate each argument type
+        for (arg, expected_type) in args.iter_mut().zip(param_types.iter()) {
+            let arg_type = self.analyze_node(arg)?;
+            if !self.types_compatible(&arg_type, expected_type) {
+                self.error(
+                    format!(
+                        "Argument type mismatch for {}: expected {}, got {}",
+                        self.resolve_name(&func_name),
+                        expected_type,
+                        arg_type
+                    ),
+                    "analyze_func_call",
+                );
+                return Err(());
+            }
+        }
+
+        // Return function's return type
+        Ok(return_type.unwrap_or(Type::Void))
+    }
+
+    fn analyze_return(&mut self, value: &mut Option<Box<Node>>) -> Result<Type, ()> {
+        match value {
+            Some(val) => {
+                let return_type = self.analyze_node(val)?;
+                // Check type matches function's expected return type
+                if let Some(expected) = &self.current_return_type
+                    && !self.types_compatible(&return_type, expected)
+                {
+                    self.error(
+                        format!(
+                            "Return type mismatch: expected {}, got {}",
+                            expected, return_type
+                        ),
+                        "analyze_return",
+                    );
+                    return Err(());
+                }
+                Ok(return_type)
+            }
+            None => {
+                // Void return is only valid if function expects void
+                if let Some(expected) = &self.current_return_type
+                    && expected != &Type::Void
+                {
+                    self.error(
+                        format!("Function must return {}, but returns nothing", expected),
+                        "analyze_return",
+                    );
+                    return Err(());
+                }
+                Ok(Type::Void)
+            }
+        }
+    }
+
+    fn error(&mut self, message: String, function_name: &str) {
+        let context = if let Some(func) = self.current_function {
+            format!(
+                "[{}] in function '{}': {}",
+                function_name,
+                self.resolve_name(&func),
+                message
+            )
+        } else {
+            format!("[{}] {}", function_name, message)
+        };
+        self.errors.push(context);
+    }
+
+    fn resolve_name(&self, spur: &Spur) -> &str {
+        self.rodeo.resolve(spur)
+    }
+
+    fn types_compatible(&self, actual: &Type, expected: &Type) -> bool {
+        match (actual, expected) {
+            (a, b) if a == b => true,
+            (Type::Integer, Type::Float) => true,
+            (Type::Array(a), Type::Array(b)) => self.types_compatible(a, b),
+            _ => false,
+        }
+    }
+}

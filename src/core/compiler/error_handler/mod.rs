@@ -6,7 +6,7 @@ use std::fmt::Formatter;
 pub struct CompilerError {
     message: String, // Error message
     from: String,    // From which part of the compiler
-    line: usize,     // Line with error
+    line: u16,       // Line with error
     column: u16,     // Character offset from line start
     length: u16,
     source_line: Option<String>, // Line contents
@@ -17,7 +17,7 @@ impl CompilerError {
     pub fn new(
         message: String,
         from: String,
-        line: usize,
+        line: u16,
         column: u16,
         length: u16,
         source_line: Option<String>,
@@ -41,29 +41,38 @@ impl CompilerError {
         output.push_str(&format!("[ERROR]: {}: {}\n", self.from, self.message));
 
         // Location line
-        output.push_str(&format!(
-            "  --> {}:{}:{}\n",
-            self.filename.as_deref().unwrap_or(""),
-            self.line,
-            self.column
-        ));
+        if self.line != 0 && self.column != 0 {
+            output.push_str(&format!(
+                "  --> {}:{}:{}\n",
+                self.filename.as_deref().unwrap_or(""),
+                self.line,
+                self.column
+            ));
+        } else {
+            output.push_str(&format!(
+                "  --> {}\n",
+                self.filename.as_deref().unwrap_or(""),
+            ));
+        }
 
-        // Separator
-        output.push_str("   |\n");
+        if self.source_line.is_some() {
+            // Separator
+            output.push_str("   |\n");
 
-        // Source line with number
-        output.push_str(&format!(
-            " {} | {}\n",
-            self.line,
-            self.source_line.as_deref().unwrap_or("")
-        ));
+            // Source line with number
+            output.push_str(&format!(
+                " {} | {}\n",
+                self.line,
+                self.source_line.as_deref().unwrap()
+            ));
 
-        // Pointer to error
-        output.push_str(&format!(
-            "   |{}{} here\n",
-            " ".repeat(self.column as usize),
-            "^".repeat(self.length as usize)
-        ));
+            // Pointer to error
+            output.push_str(&format!(
+                "   |{}{} here\n",
+                " ".repeat(self.column as usize),
+                "^".repeat(self.length as usize)
+            ));
+        }
 
         // Apply color to entire output
         output.red().to_string()

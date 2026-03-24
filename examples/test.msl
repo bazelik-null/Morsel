@@ -10,7 +10,8 @@ func divide(x: int, y: int): float {
 
 func main() {
     let x = 1;
-    let mut y: float = 2;
+    let y = 2;
+    let mut z: float = 0;
 
-    y = divide(x, y);
+    z = divide(x, y);
 }

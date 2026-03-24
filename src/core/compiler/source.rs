@@ -15,7 +15,7 @@ impl SourceCode {
     }
 
     /// Returns line as string
-    pub fn get_line(&self, line: usize) -> Option<String> {
+    pub fn get_line(&self, line: u16) -> Option<String> {
         let mut current_line = 0;
 
         for (i, &c) in self.source.iter().enumerate() {

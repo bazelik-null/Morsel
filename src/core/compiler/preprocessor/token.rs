@@ -30,7 +30,7 @@ impl LexerOutput {
 #[derive(Debug, Copy, Clone)]
 pub struct Token {
     pub token_type: TokenType,
-    pub line: usize,
+    pub line: u16,
     pub column: u16,
     pub length: u16,
 }
@@ -68,15 +68,15 @@ pub enum OperatorValue {
     Modulo,   // %
     Power,    // ^
     // Logic operators
-    Equal,              // ==
-    NotEqual,           // !=
-    Not,                // !
-    GreaterThan,        // >
-    LessThan,           // <
-    GreaterThanOrEqual, // >=
-    LessThanOrEqual,    // <=
-    And,                // &&
-    Or,                 // ||
+    Equal,        // ==
+    NotEqual,     // !=
+    Not,          // !
+    Greater,      // >
+    Less,         // <
+    GreaterEqual, // >=
+    LessEqual,    // <=
+    And,          // &&
+    Or,           // ||
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -114,7 +114,7 @@ pub enum KeywordValue {
 }
 
 impl Token {
-    pub fn new(token_type: TokenType, line: usize, column: u16, length: u16) -> Self {
+    pub fn new(token_type: TokenType, line: u16, column: u16, length: u16) -> Self {
         Self {
             token_type,
             line,
@@ -136,10 +136,10 @@ impl fmt::Display for OperatorValue {
             OperatorValue::Equal => "==",
             OperatorValue::NotEqual => "!=",
             OperatorValue::Not => "!",
-            OperatorValue::GreaterThan => ">",
-            OperatorValue::LessThan => "<",
-            OperatorValue::GreaterThanOrEqual => ">=",
-            OperatorValue::LessThanOrEqual => "<=",
+            OperatorValue::Greater => ">",
+            OperatorValue::Less => "<",
+            OperatorValue::GreaterEqual => ">=",
+            OperatorValue::LessEqual => "<=",
             OperatorValue::And => "&&",
             OperatorValue::Or => "||",
         };

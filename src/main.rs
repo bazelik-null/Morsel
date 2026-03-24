@@ -92,7 +92,7 @@ fn build(rodeo: &mut Rodeo, source: &SourceCode) -> Result<(), Vec<CompilerError
     println!("{}", "[INFO]: Lexing complete.".green());
 
     // Parsing phase
-    let parser = Parser::new(lexer_output, source);
+    let parser = Parser::new(lexer_output, source, rodeo);
     let parser_output = parser.parse();
 
     if !parser_output.errors.is_empty() {

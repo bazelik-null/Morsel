@@ -8,7 +8,7 @@ use lasso::{Rodeo, Spur};
 pub struct Lexer<'a> {
     source_code: &'a SourceCode,
     pos: usize,        // Current position
-    line: usize,       // Current line
+    line: u16,         // Current line
     line_start: usize, // Position where current line starts
     rodeo: &'a mut Rodeo,
     output: LexerOutput,
@@ -283,12 +283,12 @@ impl<'a> Lexer<'a> {
             ('<', '=') => {
                 self.advance();
                 self.advance();
-                TokenType::Operator(OperatorValue::LessThanOrEqual)
+                TokenType::Operator(OperatorValue::LessEqual)
             }
             ('>', '=') => {
                 self.advance();
                 self.advance();
-                TokenType::Operator(OperatorValue::GreaterThanOrEqual)
+                TokenType::Operator(OperatorValue::GreaterEqual)
             }
             ('=', _) => {
                 self.advance();
@@ -296,11 +296,11 @@ impl<'a> Lexer<'a> {
             }
             ('<', _) => {
                 self.advance();
-                TokenType::Operator(OperatorValue::LessThan)
+                TokenType::Operator(OperatorValue::Less)
             }
             ('>', _) => {
                 self.advance();
-                TokenType::Operator(OperatorValue::GreaterThan)
+                TokenType::Operator(OperatorValue::Greater)
             }
             ('!', _) => {
                 self.advance();

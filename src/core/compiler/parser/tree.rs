@@ -24,13 +24,14 @@ impl ParserOutput {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     Integer,
     Float,
     Boolean,
     String,
     Array(Box<Type>),
+    Void,
 }
 
 impl fmt::Display for Type {
@@ -41,6 +42,7 @@ impl fmt::Display for Type {
             Type::Boolean => write!(f, "bool"),
             Type::String => write!(f, "string"),
             Type::Array(inner) => write!(f, "[{}]", inner),
+            Type::Void => write!(f, "void"),
         }
     }
 }
