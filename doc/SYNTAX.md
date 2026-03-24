@@ -57,12 +57,38 @@ let x = x * 2; // x is now 12
 
 Morsel is **statically typed**. The compiler can usually infer types, but you can also explicitly annotate them.
 
-### Scalar Types
+### Built-in Types
 
 - **Integer:** `int` - 32-bit integer
 - **Float:** `float` - 32-bit floating-point number
 - **String:** `string` - Text data
 - **Boolean:** `bool` - Boolean value (true/false)
+
+### Arrays
+
+To define a **fixed-size array**, wrap the type into `[type: n]`:
+
+```morsel
+let mut x: [int: 3] = [0, 1, 2]
+x[0] = 1;
+```
+
+To define a **dynamic array**, wrap the type into just `[type]`:
+
+```morsel
+let mut x: [int] = [0, 1, 2]
+x[0] = 1;
+```
+
+**WARNING:** Dynamic arrays are unsafe because out-of-bounds access is **not** checked at compile-time. The following
+compiles but may fail at runtime:
+
+```morsel
+let mut x: [int] = [0, 1, 2]
+x[10] = 5;  // Error: Compiles, but out-of-bounds at runtime
+```
+
+Use fixed arrays `[type: n]` when you know the size upfront for compile-time safety.
 
 ## Operators
 

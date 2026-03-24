@@ -71,6 +71,7 @@ impl<'a> Parser<'a> {
 
                 Ok(Node::Identifier(spur))
             }
+            TokenType::Syntax(SyntaxValue::LBracket) => self.parse_array_literal(),
             TokenType::Operator(op) => match op {
                 OperatorValue::Plus | OperatorValue::Minus | OperatorValue::Not => {
                     self.advance();
@@ -108,28 +109,89 @@ impl<'a> Parser<'a> {
 
     fn parse_postfix(&mut self, mut lhs: Node) -> Result<Node, ()> {
         loop {
-            if self.check_syntax(SyntaxValue::LParen) {
-                self.advance();
-                let args = self.parse_arguments()?;
-                self.expect_syntax(SyntaxValue::RParen)?;
+            match self.peek_token_type() {
+                Ok(TokenType::Syntax(SyntaxValue::LParen)) => {
+                    // Function call: func(args)
+                    self.advance();
+                    let args = self.parse_arguments()?;
+                    self.expect_syntax(SyntaxValue::RParen)?;
 
-                lhs = Node::FunctionCall {
-                    name: Box::new(lhs),
-                    args,
-                };
-            } else {
-                break;
+                    lhs = Node::FunctionCall {
+                        name: Box::new(lhs),
+                        args,
+                    };
+                }
+                Ok(TokenType::Syntax(SyntaxValue::LBracket)) => {
+                    // Array indexing: arr[index]
+                    self.advance();
+                    let index = self.parse_expression(0)?;
+                    self.expect_syntax(SyntaxValue::RBracket)?;
+
+                    lhs = Node::ArrayAccess {
+                        array: Box::new(lhs),
+                        index: Box::new(index),
+                    };
+                }
+                _ => break,
             }
         }
         Ok(lhs)
     }
 
+    fn parse_array_literal(&mut self) -> Result<Node, ()> {
+        self.expect_syntax(SyntaxValue::LBracket)?;
+        let mut elements = Vec::new();
+
+        // Handle empty arrays: []
+        if self.check_syntax(SyntaxValue::RBracket) {
+            self.advance();
+            return Ok(Node::ArrayLiteral(elements));
+        }
+
+        loop {
+            if self.is_eof() {
+                self.error_at_current("Unexpected EOF in array literal");
+                return Err(());
+            }
+
+            elements.push(self.parse_expression(0)?);
+
+            if !self.match_syntax(SyntaxValue::Comma) {
+                break;
+            }
+
+            // Allow trailing comma: [1, 2, 3,]
+            if self.check_syntax(SyntaxValue::RBracket) {
+                break;
+            }
+        }
+
+        self.expect_syntax(SyntaxValue::RBracket)?;
+        Ok(Node::ArrayLiteral(elements))
+    }
+
     fn parse_arguments(&mut self) -> Result<Vec<Node>, ()> {
         let mut args = Vec::new();
 
-        while !self.check_syntax(SyntaxValue::RParen) {
+        // Handle empty argument lists: func()
+        if self.check_syntax(SyntaxValue::RParen) {
+            return Ok(args);
+        }
+
+        loop {
+            if self.is_eof() {
+                self.error_at_current("Unexpected EOF in argument list");
+                return Err(());
+            }
+
             args.push(self.parse_expression(0)?);
+
             if !self.match_syntax(SyntaxValue::Comma) {
+                break;
+            }
+
+            // Allow trailing comma: func(a, b,)
+            if self.check_syntax(SyntaxValue::RParen) {
                 break;
             }
         }

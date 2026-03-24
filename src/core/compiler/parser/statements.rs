@@ -1,6 +1,8 @@
-use crate::core::compiler::parser::Parser;
 use crate::core::compiler::parser::tree::{Node, Parameter, Type};
-use crate::core::compiler::preprocessor::token::{KeywordValue, SyntaxValue, TokenType};
+use crate::core::compiler::parser::Parser;
+use crate::core::compiler::preprocessor::token::{
+    KeywordValue, LiteralValue, SyntaxValue, TokenType,
+};
 
 impl<'a> Parser<'a> {
     pub fn parse_statement(&mut self) -> Result<Node, ()> {
@@ -162,6 +164,30 @@ impl<'a> Parser<'a> {
         Ok(Node::Block(statements))
     }
 
+    fn parse_array_size(&mut self) -> Result<usize, ()> {
+        match self.peek_token_type()? {
+            TokenType::Literal(LiteralValue::Integer(n)) => {
+                self.advance();
+                if n <= 0 {
+                    self.error("Array size must be positive", *self.peek().unwrap());
+                    return Err(());
+                }
+                Ok(n as usize)
+            }
+            _ => {
+                let token = self.peek().cloned().ok_or(())?;
+                self.error(
+                    &format!(
+                        "Expected positive integer for array size, found {:?}",
+                        token.token_type
+                    ),
+                    token,
+                );
+                Err(())
+            }
+        }
+    }
+
     fn parse_type(&mut self) -> Result<Type, ()> {
         match self.peek_token_type()? {
             TokenType::Keyword(KeywordValue::Integer) => {
@@ -183,8 +209,18 @@ impl<'a> Parser<'a> {
             TokenType::Syntax(SyntaxValue::LBracket) => {
                 self.advance();
                 let inner_type = self.parse_type()?;
-                self.expect_syntax(SyntaxValue::RBracket)?;
-                Ok(Type::Array(Box::new(inner_type)))
+
+                // Check for fixed array syntax: [type: n]
+                if self.match_syntax(SyntaxValue::Colon) {
+                    // Parse the size
+                    let size = self.parse_array_size()?;
+                    self.expect_syntax(SyntaxValue::RBracket)?;
+                    Ok(Type::FixedArray(Box::new(inner_type), size))
+                } else {
+                    // Dynamic array: [type]
+                    self.expect_syntax(SyntaxValue::RBracket)?;
+                    Ok(Type::Array(Box::new(inner_type)))
+                }
             }
             _ => {
                 let token = self.peek().cloned().ok_or(())?;

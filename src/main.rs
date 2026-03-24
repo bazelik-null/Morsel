@@ -1,5 +1,6 @@
 use crate::core::compiler::error_handler::CompilerError;
 use crate::core::compiler::parser::Parser;
+use crate::core::compiler::parser::tree_printer::TreePrinter;
 use crate::core::compiler::preprocessor::lexer::Lexer;
 use crate::core::compiler::source::SourceCode;
 use colored::Colorize;
@@ -100,11 +101,10 @@ fn build(rodeo: &mut Rodeo, source: &SourceCode) -> Result<(), Vec<CompilerError
     }
     println!("{}", "[INFO]: Parsing complete.".green());
 
-    // TODO This is debug output
-    // Print AST
-    for node in parser_output.nodes {
-        println!("{}", node.print(rodeo));
-    }
+    // Debug tree print
+    let printer = TreePrinter::new(rodeo);
+    let tree_output = printer.print(&parser_output.nodes);
+    println!("{}", tree_output);
 
     Ok(())
 }

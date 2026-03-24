@@ -3,6 +3,7 @@ use crate::core::compiler::parser::tree::{Node, Type};
 use crate::core::compiler::parser::type_inference::{
     infer_binary_type, infer_literal_type, infer_unary_type,
 };
+use crate::core::compiler::preprocessor::token::LiteralValue;
 use lasso::{Rodeo, Spur};
 use std::collections::HashMap;
 
@@ -70,8 +71,8 @@ impl<'a> SemanticAnalyzer<'a> {
 
     fn analyze_node(&mut self, node: &mut Node) -> Result<Type, ()> {
         match node {
-            Node::Literal(lit) => Ok(infer_literal_type(lit)), // Infer from literal value
-            Node::Identifier(name) => self.lookup_identifier(*name), // Look up in scope
+            Node::Literal(lit) => Ok(infer_literal_type(lit)),
+            Node::Identifier(name) => self.lookup_identifier(*name),
             Node::VariableDecl { .. } => self.analyze_var_decl(node),
             Node::Assignment { .. } => self.analyze_assignment(node),
             Node::Binary { .. } => self.analyze_binary(node),
@@ -82,6 +83,8 @@ impl<'a> SemanticAnalyzer<'a> {
             Node::FunctionDecl { .. } => self.analyze_func_decl(node),
             Node::FunctionCall { .. } => self.analyze_func_call(node),
             Node::Return(val) => self.analyze_return(val),
+            Node::ArrayLiteral(elements) => self.analyze_array_literal(elements),
+            Node::ArrayAccess { array, index } => self.analyze_array_access(array, index),
         }
     }
 
@@ -92,6 +95,74 @@ impl<'a> SemanticAnalyzer<'a> {
             .ok_or_else(|| {
                 self.error(format!("Undefined variable: {}", self.resolve_name(&name)));
             })
+    }
+
+    fn analyze_array_literal(&mut self, elements: &mut [Node]) -> Result<Type, ()> {
+        // Empty array has unknown element type
+        if elements.is_empty() {
+            return Ok(Type::Array(Box::new(Type::Void)));
+        }
+
+        let first_type = self.analyze_node(&mut elements[0])?;
+
+        // Validate all elements have same type
+        for (i, elem) in elements.iter_mut().enumerate().skip(1) {
+            let elem_type = self.analyze_node(elem)?;
+            if !self.types_compatible(&elem_type, &first_type) {
+                self.error(format!(
+                    "Array element type mismatch at index {}: expected {}, got {}",
+                    i, first_type, elem_type
+                ));
+                return Err(());
+            }
+        }
+
+        // Infer FixedArray from literal
+        Ok(Type::FixedArray(Box::new(first_type), elements.len()))
+    }
+
+    fn analyze_array_access(&mut self, array: &mut Node, index: &mut Node) -> Result<Type, ()> {
+        let array_type = self.analyze_node(array)?;
+
+        // Index must be integer
+        let index_type = self.analyze_node(index)?;
+        if index_type != Type::Integer {
+            self.error(format!("Array index must be integer, got {}", index_type));
+            return Err(());
+        }
+
+        match &array_type {
+            Type::FixedArray(inner_type, size) => {
+                // Validate constant indices at compile time
+                if let Node::Literal(LiteralValue::Integer(idx)) = index
+                    && (*idx < 0 || (*idx as usize) >= *size)
+                {
+                    self.error(format!(
+                        "Array index {} out of bounds for array of size {}",
+                        idx, size
+                    ));
+                    return Err(());
+                }
+                Ok((**inner_type).clone())
+            }
+            Type::Array(inner_type) => {
+                // We can't check dynamic arrays at compile time
+                if let Node::Literal(LiteralValue::Integer(idx)) = index
+                    && (*idx < 0)
+                {
+                    self.error(format!(
+                        "Array index {} is negative and will always be out of bounds",
+                        idx
+                    ));
+                    return Err(());
+                }
+                Ok((**inner_type).clone())
+            }
+            _ => {
+                self.error(format!("Cannot index non-array type: {}", array_type));
+                Err(())
+            }
+        }
     }
 
     fn analyze_var_decl(&mut self, node: &mut Node) -> Result<Type, ()> {
@@ -108,9 +179,17 @@ impl<'a> SemanticAnalyzer<'a> {
         let value_type = self.analyze_node(value)?; // Get type of assigned value
 
         // Use annotation if present, else infer from value
-        let declared_type = type_annotation
+        let mut declared_type = type_annotation
             .get_or_insert_with(|| value_type.clone())
             .clone();
+
+        // Convert inferred FixedArray to dynamic Array
+        if type_annotation.is_none() {
+            declared_type = match declared_type {
+                Type::FixedArray(inner, _) => Type::Array(inner),
+                other => other,
+            };
+        }
 
         // Ensure value type matches declared type
         if !self.types_compatible(&value_type, &declared_type) {
@@ -166,6 +245,39 @@ impl<'a> SemanticAnalyzer<'a> {
                 }
 
                 Ok(symbol.type_annotation.clone())
+            }
+            Node::ArrayAccess { array, index } => {
+                // Check if the array variable itself is mutable
+                if let Node::Identifier(arr_name) = array.as_ref() {
+                    let symbol = self.scope_stack.lookup(*arr_name).ok_or_else(|| {
+                        self.error(format!(
+                            "Undefined variable: {}",
+                            self.resolve_name(arr_name)
+                        ));
+                    })?;
+
+                    if !symbol.mutable {
+                        self.error(format!(
+                            "Cannot mutate immutable array: {}",
+                            self.resolve_name(arr_name)
+                        ));
+                        return Err(());
+                    }
+                }
+
+                // Validate array access is valid
+                let element_type = self.analyze_array_access(array, index)?;
+
+                // Value type must match element type
+                if !self.types_compatible(&value_type, &element_type) {
+                    self.error(format!(
+                        "Type mismatch in array assignment: expected {}, got {}",
+                        element_type, value_type
+                    ));
+                    return Err(());
+                }
+
+                Ok(element_type)
             }
             _ => {
                 self.error("Invalid assignment target".to_string());
@@ -388,12 +500,13 @@ impl<'a> SemanticAnalyzer<'a> {
             return Err(());
         }
 
-        // Validate each argument type
-        for (arg, expected_type) in args.iter_mut().zip(param_types.iter()) {
+        // Validate each argument type with bounds checking
+        for (i, (arg, expected_type)) in args.iter_mut().zip(param_types.iter()).enumerate() {
             let arg_type = self.analyze_node(arg)?;
             if !self.types_compatible(&arg_type, expected_type) {
                 self.error(format!(
-                    "Argument type mismatch for {}: expected {}, got {}",
+                    "Argument {} type mismatch for {}: expected {}, got {}",
+                    i,
                     self.resolve_name(&func_name),
                     expected_type,
                     arg_type
@@ -459,7 +572,12 @@ impl<'a> SemanticAnalyzer<'a> {
         match (actual, expected) {
             (a, b) if a == b => true,
             (Type::Integer, Type::Float) => true,
-            (Type::Array(a), Type::Array(b)) => self.types_compatible(a, b),
+            // FixedArray can be assigned to dynamic Array
+            (Type::FixedArray(actual_inner, _), Type::Array(expected_inner)) => {
+                self.types_compatible(actual_inner, expected_inner)
+            }
+            // Dynamic Array cannot be assigned to FixedArray
+            (Type::Array(_), Type::FixedArray(_, _)) => false,
             _ => false,
         }
     }

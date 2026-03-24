@@ -1,17 +1,16 @@
 // Test file
 
-func divide(x: int, y: int): float {
-    if (x == 0 || y == 0) {
+func divide(args: [float: 2]): float {
+    if (args[0] == 0.0 || args[1] == 0.0) {
         return 0;
     }
 
-    x / y
+    args[0] / args[1]
 }
 
 func main() {
-    let x = 1;
-    let y = 2;
-    let mut z: int = 0;
+    let mut args: [float: 2] = [0.0, 1.0];
+    let mut result = 0.0;
 
-    z = divide(x, y);
+    result = divide(args);
 }
