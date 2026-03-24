@@ -1,5 +1,5 @@
 use crate::core::compiler::error_handler::CompilerError;
-use crate::core::compiler::parser::parser::Parser;
+use crate::core::compiler::parser::Parser;
 use crate::core::compiler::preprocessor::lexer::Lexer;
 use crate::core::compiler::source::SourceCode;
 use colored::Colorize;

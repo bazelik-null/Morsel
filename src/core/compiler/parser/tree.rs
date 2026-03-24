@@ -9,6 +9,12 @@ pub struct ParserOutput {
     pub errors: Vec<CompilerError>,
 }
 
+impl Default for ParserOutput {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ParserOutput {
     pub fn new() -> Self {
         Self {
