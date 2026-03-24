@@ -270,6 +270,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Synchronize the token stream inside block by skipping tokens until a safe recovery point is found
     fn panic_mode_block(&mut self) {
         while !self.is_eof() && !self.check_syntax(SyntaxValue::RBrace) {
             match self.peek_token_type() {

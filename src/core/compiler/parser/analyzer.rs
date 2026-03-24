@@ -90,10 +90,7 @@ impl<'a> SemanticAnalyzer<'a> {
             .lookup(name)
             .map(|s| s.type_annotation.clone())
             .ok_or_else(|| {
-                self.error(
-                    format!("Undefined variable: {}", self.resolve_name(&name)),
-                    "lookup_identifier",
-                );
+                self.error(format!("Undefined variable: {}", self.resolve_name(&name)));
             })
     }
 
@@ -117,13 +114,10 @@ impl<'a> SemanticAnalyzer<'a> {
 
         // Ensure value type matches declared type
         if !self.types_compatible(&value_type, &declared_type) {
-            self.error(
-                format!(
-                    "Type mismatch: expected {}, got {}",
-                    declared_type, value_type
-                ),
-                "analyze_var_decl",
-            );
+            self.error(format!(
+                "Type mismatch: expected {}, got {}",
+                declared_type, value_type
+            ));
             return Err(());
         }
 
@@ -150,43 +144,31 @@ impl<'a> SemanticAnalyzer<'a> {
             Node::Identifier(name) => {
                 // Look up target variable
                 let symbol = self.scope_stack.lookup(*name).ok_or_else(|| {
-                    self.error(
-                        format!("Undefined variable: {}", self.resolve_name(name)),
-                        "analyze_assignment",
-                    );
+                    self.error(format!("Undefined variable: {}", self.resolve_name(name)));
                 })?;
 
                 // Prevent reassignment of immutable variables
                 if !symbol.mutable {
-                    self.error(
-                        format!(
-                            "Cannot assign to immutable variable: {}",
-                            self.resolve_name(name)
-                        ),
-                        "analyze_assignment",
-                    );
+                    self.error(format!(
+                        "Cannot assign to immutable variable: {}",
+                        self.resolve_name(name)
+                    ));
                     return Err(());
                 }
 
                 // Check value type matches variable type
                 if !self.types_compatible(&value_type, &symbol.type_annotation) {
-                    self.error(
-                        format!(
-                            "Type mismatch in assignment: expected {}, got {}",
-                            symbol.type_annotation, value_type
-                        ),
-                        "analyze_assignment",
-                    );
+                    self.error(format!(
+                        "Type mismatch in assignment: expected {}, got {}",
+                        symbol.type_annotation, value_type
+                    ));
                     return Err(());
                 }
 
                 Ok(symbol.type_annotation.clone())
             }
             _ => {
-                self.error(
-                    "Invalid assignment target".to_string(),
-                    "analyze_assignment",
-                );
+                self.error("Invalid assignment target".to_string());
                 Err(())
             }
         }
@@ -230,10 +212,7 @@ impl<'a> SemanticAnalyzer<'a> {
         let cond_type = self.analyze_node(condition)?;
         // Condition must be boolean
         if cond_type != Type::Boolean {
-            self.error(
-                format!("If condition must be boolean, got {}", cond_type),
-                "analyze_if",
-            );
+            self.error(format!("If condition must be boolean, got {}", cond_type));
             return Err(());
         }
 
@@ -258,13 +237,10 @@ impl<'a> SemanticAnalyzer<'a> {
                 if self.types_compatible(&else_t, &then_t) {
                     Ok(then_t)
                 } else {
-                    self.error(
-                        format!(
-                            "If/else branches have incompatible types: {} vs {}",
-                            then_t, else_t
-                        ),
-                        "analyze_if",
-                    );
+                    self.error(format!(
+                        "If/else branches have incompatible types: {} vs {}",
+                        then_t, else_t
+                    ));
                     Err(())
                 }
             }
@@ -281,10 +257,10 @@ impl<'a> SemanticAnalyzer<'a> {
         let cond_type = self.analyze_node(condition)?;
         // Condition must be boolean
         if cond_type != Type::Boolean {
-            self.error(
-                format!("While condition must be boolean, got {}", cond_type),
-                "analyze_while",
-            );
+            self.error(format!(
+                "While condition must be boolean, got {}",
+                cond_type
+            ));
             return Err(());
         }
 
@@ -310,13 +286,10 @@ impl<'a> SemanticAnalyzer<'a> {
                 if is_last && self.current_return_type.is_some() {
                     let expected = self.current_return_type.as_ref().unwrap();
                     if !self.types_compatible(&t, expected) {
-                        self.error(
-                            format!(
-                                "Implicit return type mismatch: expected {}, got {}",
-                                expected, t
-                            ),
-                            "analyze_block",
-                        );
+                        self.error(format!(
+                            "Implicit return type mismatch: expected {}, got {}",
+                            expected, t
+                        ));
                     }
                 }
                 last_type = t;
@@ -367,13 +340,10 @@ impl<'a> SemanticAnalyzer<'a> {
         if let Some(expected) = return_type
             && !self.types_compatible(&body_type, expected)
         {
-            self.error(
-                format!(
-                    "Function return type mismatch: expected {}, got {}",
-                    expected, body_type
-                ),
-                "analyze_func_decl",
-            );
+            self.error(format!(
+                "Function return type mismatch: expected {}, got {}",
+                expected, body_type
+            ));
         }
 
         self.scope_stack.pop(); // Exit function scope
@@ -393,10 +363,7 @@ impl<'a> SemanticAnalyzer<'a> {
         let func_name = match name.as_ref() {
             Node::Identifier(spur) => *spur,
             _ => {
-                self.error(
-                    "Function name must be an identifier".to_string(),
-                    "analyze_func_call",
-                );
+                self.error("Function name must be an identifier".to_string());
                 return Err(());
             }
         };
@@ -404,23 +371,20 @@ impl<'a> SemanticAnalyzer<'a> {
         // Look up function signature
         let (param_types, return_type) =
             self.functions.get(&func_name).cloned().ok_or_else(|| {
-                self.error(
-                    format!("Undefined function: {}", self.resolve_name(&func_name)),
-                    "analyze_func_call",
-                );
+                self.error(format!(
+                    "Undefined function: {}",
+                    self.resolve_name(&func_name)
+                ));
             })?;
 
         // Check argument count matches parameter count
         if args.len() != param_types.len() {
-            self.error(
-                format!(
-                    "Function {} expects {} arguments, got {}",
-                    self.resolve_name(&func_name),
-                    param_types.len(),
-                    args.len()
-                ),
-                "analyze_func_call",
-            );
+            self.error(format!(
+                "Function {} expects {} arguments, got {}",
+                self.resolve_name(&func_name),
+                param_types.len(),
+                args.len()
+            ));
             return Err(());
         }
 
@@ -428,15 +392,12 @@ impl<'a> SemanticAnalyzer<'a> {
         for (arg, expected_type) in args.iter_mut().zip(param_types.iter()) {
             let arg_type = self.analyze_node(arg)?;
             if !self.types_compatible(&arg_type, expected_type) {
-                self.error(
-                    format!(
-                        "Argument type mismatch for {}: expected {}, got {}",
-                        self.resolve_name(&func_name),
-                        expected_type,
-                        arg_type
-                    ),
-                    "analyze_func_call",
-                );
+                self.error(format!(
+                    "Argument type mismatch for {}: expected {}, got {}",
+                    self.resolve_name(&func_name),
+                    expected_type,
+                    arg_type
+                ));
                 return Err(());
             }
         }
@@ -453,13 +414,10 @@ impl<'a> SemanticAnalyzer<'a> {
                 if let Some(expected) = &self.current_return_type
                     && !self.types_compatible(&return_type, expected)
                 {
-                    self.error(
-                        format!(
-                            "Return type mismatch: expected {}, got {}",
-                            expected, return_type
-                        ),
-                        "analyze_return",
-                    );
+                    self.error(format!(
+                        "Return type mismatch: expected {}, got {}",
+                        expected, return_type
+                    ));
                     return Err(());
                 }
                 Ok(return_type)
@@ -469,10 +427,10 @@ impl<'a> SemanticAnalyzer<'a> {
                 if let Some(expected) = &self.current_return_type
                     && expected != &Type::Void
                 {
-                    self.error(
-                        format!("Function must return {}, but returns nothing", expected),
-                        "analyze_return",
-                    );
+                    self.error(format!(
+                        "Function must return {}, but returns nothing",
+                        expected
+                    ));
                     return Err(());
                 }
                 Ok(Type::Void)
@@ -480,16 +438,15 @@ impl<'a> SemanticAnalyzer<'a> {
         }
     }
 
-    fn error(&mut self, message: String, function_name: &str) {
+    fn error(&mut self, message: String) {
         let context = if let Some(func) = self.current_function {
             format!(
-                "[{}] in function '{}': {}",
-                function_name,
+                "Traced error in function [{}]: {}",
                 self.resolve_name(&func),
                 message
             )
         } else {
-            format!("[{}] {}", function_name, message)
+            format!(" {}", message)
         };
         self.errors.push(context);
     }

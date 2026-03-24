@@ -22,8 +22,9 @@ See [SYNTAX.md](doc/SYNTAX.md) for detailed syntax documentation.
 - [x] Error handling
 -
 - [x] Lexer
+-
 - [x] Parser
-- [ ] Tree-walker (for debug)
+- [x] Semantic analyzer
 -
 - [ ] Bytecode specification
 - [ ] Compiler

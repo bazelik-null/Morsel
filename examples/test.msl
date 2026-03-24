@@ -11,7 +11,7 @@ func divide(x: int, y: int): float {
 func main() {
     let x = 1;
     let y = 2;
-    let mut z: float = 0;
+    let mut z: int = 0;
 
     z = divide(x, y);
 }

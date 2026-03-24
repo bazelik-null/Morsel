@@ -45,17 +45,15 @@ pub fn infer_unary_type(
     rhs: &Type,
     errors: &mut Vec<String>,
 ) -> Result<Type, ()> {
-    use OperatorValue::*;
-
     match op {
-        Minus => match rhs {
+        OperatorValue::Minus => match rhs {
             Type::Integer | Type::Float => Ok(rhs.clone()),
             _ => {
                 errors.push(format!("Cannot negate type {}", rhs));
                 Err(())
             }
         },
-        Not => {
+        OperatorValue::Not => {
             if rhs == &Type::Boolean {
                 Ok(Type::Boolean)
             } else {
