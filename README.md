@@ -16,6 +16,10 @@ type safety of Rust with an easy, expression-based syntax inspired by C, Go, and
 
 See [SYNTAX.md](doc/SYNTAX.md) for detailed syntax documentation.
 
+# Bytecode and VM
+
+See [BYTECODE.md](doc/BYTECODE.md) for detailed bytecode and VM documentation.
+
 # Roadmap
 
 - [x] Syntax specification
@@ -29,26 +33,27 @@ See [SYNTAX.md](doc/SYNTAX.md) for detailed syntax documentation.
 - [x] Type safety
 - [ ] Type casting
 -
-- [ ] Bytecode specification
-- [ ] Compiler
+- [x] Bytecode specification
+- [x] Compiler
+-
+- [x] Math expressions
+- [x] Variables
+-
+- [x] Functions
+- [x] Control flow (if/else statements, loops, etc)
 -
 - [ ] Basic virtual machine
 -
-- [ ] Math expressions
 - [ ] Hard built-in functions (for debug)
 -
-- [ ] Variables
 - [ ] Memory management (stack, heap, etc)
--
-- [ ] Full virtual machine
--
-- [ ] Functions
-- [ ] Control flow (if/else statements, loops, etc)
+- [ ] Arrays and data structures
 -
 - [ ] Imports and namespaces
 - [ ] Built-in std library (print(), input())
 -
-- [ ] Arrays and data structures
+- [ ] Full virtual machine
+-
 - [ ] Additional std library functions
 - [ ] Performance optimizations
 - [ ] **First release**

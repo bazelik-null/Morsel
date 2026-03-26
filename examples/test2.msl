@@ -1,0 +1,17 @@
+// Test file
+
+func divide(x: int, y: int): int {
+    if (x == 0 || y == 0) {
+        return 0;
+    }
+
+    x / y
+}
+
+func main() {
+    let x = 1;
+    let y = 2;
+    let mut result = 0;
+
+    result = divide(x, y);
+}
