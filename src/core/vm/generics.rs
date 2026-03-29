@@ -11,10 +11,12 @@ impl VirtualMachine {
         FI: Fn(i32, i32) -> i32,
         FF: Fn(f32, f32) -> f32,
     {
-        let vb = self.memory.peek()?;
-        let va = self.memory.peek()?;
+        let vb = self.memory.pop()?;
+        let va = self.memory.pop()?;
+
         let na = self.value_to_num(va)?;
         let nb = self.value_to_num(vb)?;
+
         let res = match (na, nb) {
             (Num::Int(ai), Num::Int(bi)) => Num::Int(int_op(ai, bi)),
             (a, b) => Num::Float(float_op(a.to_f32(), b.to_f32())),

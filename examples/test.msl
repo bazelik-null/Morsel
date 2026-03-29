@@ -1,4 +1,3 @@
-
 func float_workload() {
     let mut x: float = 1.0001;
     let mut i: int = 0;
@@ -19,5 +18,9 @@ func float_workload() {
 }
 
 func main() {
-    float_workload();
+    let mut x = 0;
+    while (x < 1000) {
+        float_workload();
+        x = x + 1;
+    }
 }

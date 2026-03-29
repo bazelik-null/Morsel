@@ -21,8 +21,8 @@ const HEAP_SIZE: usize = 8000000; // 8MB
 enum Command {
     Build(String),
     Disassemble(String),
-    Run(String, bool),
-    BuildAndRun(String, bool),
+    Run(String, bool, bool),         // path, debug, time
+    BuildAndRun(String, bool, bool), // path, debug, time
 }
 
 fn main() {
@@ -42,12 +42,14 @@ fn execute_command(args: &[String]) -> Result<(), String> {
     match command {
         Command::Build(path) => handle_build(&path).map_err(|e| e.to_string()),
         Command::Disassemble(path) => handle_disassemble(&path).map_err(|e| e.to_string()),
-        Command::Run(path, debug) => handle_run(&path, debug).map_err(|e| e.to_string()),
-        Command::BuildAndRun(mut path, debug) => {
+        Command::Run(path, debug, time) => {
+            handle_run(&path, debug, time).map_err(|e| e.to_string())
+        }
+        Command::BuildAndRun(mut path, debug, time) => {
             handle_build(&path).map_err(|e| e.to_string())?;
             path += "e"; // Add e to extension
             println!(); // Print newline
-            handle_run(&path, debug).map_err(|e| e.to_string())
+            handle_run(&path, debug, time).map_err(|e| e.to_string())
         }
     }
 }
@@ -79,12 +81,14 @@ fn parse_command(args: &[String]) -> Result<Command, String> {
 
             let mut build = false;
             let mut debug = false;
+            let mut time = false;
             let mut path_opt: Option<String> = None;
 
             for token in args.iter().skip(2) {
                 match token.as_str() {
                     "--build" => build = true,
                     "--debug" => debug = true,
+                    "--time" => time = true,
                     other => {
                         if path_opt.is_none() {
                             path_opt = Some(other.to_string());
@@ -98,9 +102,9 @@ fn parse_command(args: &[String]) -> Result<Command, String> {
             let path = path_opt.ok_or_else(|| format!("'{}' requires a path argument", command))?;
 
             if build {
-                Ok(Command::BuildAndRun(path, debug))
+                Ok(Command::BuildAndRun(path, debug, time))
             } else {
-                Ok(Command::Run(path, debug))
+                Ok(Command::Run(path, debug, time))
             }
         }
         _ => Err(format!("unknown command: '{}'", command)),
@@ -113,15 +117,15 @@ fn print_usage() {
     println!();
     println!("{}", "COMMANDS:".cyan().bold());
     println!(
-        "    build <PATH>                     Build a .{} file to .{} executable",
+        "    build <PATH>                              Build a .{} file to .{} executable",
         SOURCE_EXTENSION, EXE_EXTENSION
     );
     println!(
-        "    disassemble <PATH>               Disassemble a .{} executable",
+        "    disassemble <PATH>                        Disassemble a .{} executable",
         EXE_EXTENSION
     );
     println!(
-        "    run <--build> <--debug> <PATH>   Execute a .{} file (and build if specified)",
+        "    run <--build> <--debug> <--time> <PATH>   Execute a .{} file (and build if specified)",
         EXE_EXTENSION
     );
 }
@@ -206,18 +210,19 @@ fn handle_disassemble(file_path: &str) -> io::Result<()> {
     Ok(())
 }
 
-fn handle_run(file_path: &str, debug: bool) -> io::Result<()> {
+fn handle_run(file_path: &str, debug: bool, time: bool) -> io::Result<()> {
     let exe = read_and_deserialize_executable(file_path)?;
-    run(exe, debug).map_err(io::Error::other)
+    run(exe, debug, time).map_err(io::Error::other)
 }
 
-fn run(executable: Executable, debug: bool) -> Result<(), String> {
+fn run(executable: Executable, debug: bool, time: bool) -> Result<(), String> {
     // Load VM and executable
     let mut virtual_machine = VirtualMachine::new(HEAP_SIZE);
     virtual_machine
         .load_executable(&executable)
         .map_err(|err| err.to_string())?;
 
+    let execution_start = Instant::now();
     // Execute program
     match debug {
         true => {
@@ -227,6 +232,13 @@ fn run(executable: Executable, debug: bool) -> Result<(), String> {
         false => {
             virtual_machine.run().map_err(|err| err.to_string())?;
         }
+    }
+    let execution_duration = execution_start.elapsed();
+    if time {
+        println!(
+            "{}",
+            format!("[INFO]: Execution finished in {:?}", execution_duration).green()
+        );
     }
 
     Ok(())

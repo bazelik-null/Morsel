@@ -309,6 +309,14 @@ impl Memory {
             .ok_or(VmError::StackUnderflow)
     }
 
+    /// Peek at the second from the top value of the operand stack
+    pub fn peek_before(&self) -> Result<Value, VmError> {
+        self.operand_stack
+            .get(self.operand_stack.len() - 2)
+            .copied()
+            .ok_or(VmError::StackUnderflow)
+    }
+
     /// Push a call frame
     pub fn push_frame(&mut self, return_address: usize) {
         self.call_stack.push(StackFrame::new(return_address));

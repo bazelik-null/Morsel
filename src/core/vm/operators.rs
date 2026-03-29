@@ -9,8 +9,8 @@ use std::io::Write;
 impl VirtualMachine {
     /// Numeric add or string concat (string if either operand is string)
     pub fn op_add(&mut self) -> Result<(), VmError> {
-        let vb = self.memory.pop()?;
-        let va = self.memory.pop()?;
+        let vb = self.memory.peek()?;
+        let va = self.memory.peek_before()?;
 
         // Determine types
         let ta = self.get_type(&va)?;
@@ -22,6 +22,10 @@ impl VirtualMachine {
         {
             return self.numeric_binop(|x, y| x.wrapping_add(y), |x, y| x + y);
         }
+
+        // Pop values
+        self.memory.pop()?;
+        self.memory.pop()?;
 
         // If strings
         let sa = self.value_to_string(&va)?;
@@ -50,30 +54,26 @@ impl VirtualMachine {
     }
 
     pub fn op_div(&mut self) -> Result<(), VmError> {
-        let vb = self.memory.pop()?;
-        let va = self.memory.pop()?;
+        let vb = self.memory.peek()?;
+        let va = self.memory.peek_before()?;
 
         // Check divisor
         self.check_divisor(va)?;
         self.check_divisor(vb)?;
 
-        // Push back and perform division
-        self.memory.push(va)?;
-        self.memory.push(vb)?;
+        // Perform division
         self.numeric_binop(|x, y| x / y, |x, y| x / y)
     }
 
     pub fn op_rem(&mut self) -> Result<(), VmError> {
-        let vb = self.memory.pop()?;
-        let va = self.memory.pop()?;
+        let vb = self.memory.peek()?;
+        let va = self.memory.peek_before()?;
 
         // Check divisor
         self.check_divisor(va)?;
         self.check_divisor(vb)?;
 
-        // Push back and perform mod
-        self.memory.push(va)?;
-        self.memory.push(vb)?;
+        // Perform mod
         self.numeric_binop(|x, y| x % y, |x, y| x % y)
     }
 
@@ -90,8 +90,8 @@ impl VirtualMachine {
     }
 
     pub fn op_pow(&mut self) -> Result<(), VmError> {
-        let vb = self.memory.pop()?;
-        let va = self.memory.pop()?;
+        let vb = self.memory.peek()?;
+        let va = self.memory.peek_before()?;
 
         // Determine types
         let na_res = self.value_to_num(va);
@@ -102,13 +102,13 @@ impl VirtualMachine {
             if bi >= 0 {
                 let exp = bi as u32;
                 let res = ai.wrapping_pow(exp);
+                self.memory.pop()?;
+                self.memory.pop()?;
                 return self.push_int(res);
             }
         }
 
         // Fallback to float powf
-        self.memory.push(va)?;
-        self.memory.push(vb)?;
         self.numeric_binop(|x, y| (x as f32).powf(y as f32) as i32, |x, y| x.powf(y))
     }
 
@@ -207,7 +207,8 @@ impl VirtualMachine {
                     format!("{:?}", ty),
                 ));
             }
-            // Write RTTI+payload: create buffer of RTTI then 4 bytes payload
+
+            // Write to heap
             let mut buf = Type::Integer.to_bytes();
             buf.extend_from_slice(&i.to_le_bytes());
             self.memory.write_bytes(addr, &buf)?;
@@ -217,10 +218,12 @@ impl VirtualMachine {
         // If val is a ref, copy the source object's RTTI+data into destination
         if let Value::Ref(src_addr) = val {
             let (rtti_src, data_src) = self.memory.load_from_heap(src_addr)?;
+            // Write to heap
             let mut buf = Vec::with_capacity(rtti_src.len() + data_src.len());
             buf.extend_from_slice(rtti_src);
             buf.extend_from_slice(data_src);
             self.memory.write_bytes(addr, &buf)?;
+
             return Ok(());
         }
 

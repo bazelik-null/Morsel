@@ -29,6 +29,7 @@ impl VirtualMachine {
                 self.print_debug_line()?;
             }
             self.step()?;
+            std::thread::sleep(std::time::Duration::from_millis(1));
         }
 
         self.memory.collect_garbage()?; // Collect garbage on exit

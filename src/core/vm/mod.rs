@@ -334,7 +334,6 @@ impl VirtualMachine {
             Num::Float(f) => {
                 let (rtti, data) = self.build_data(f.to_le_bytes(), Type::Float)?;
                 let addr = self.memory.save_to_heap(&rtti, &data, false)?;
-                self.push_ref(addr)?;
                 self.push_ref(addr)
             }
         }
