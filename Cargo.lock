@@ -3,14 +3,6 @@
 version = 4
 
 [[package]]
-name = "Morsel"
-version = "0.1.0"
-dependencies = [
- "colored",
- "lasso",
-]
-
-[[package]]
 name = "ahash"
 version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -60,6 +52,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e14eda50a3494b3bf7b9ce51c52434a761e383d7238ce1dd5dcec2fbc13e9fb"
 dependencies = [
  "hashbrown",
+]
+
+[[package]]
+name = "morsel"
+version = "0.1.0"
+dependencies = [
+ "colored",
+ "lasso",
 ]
 
 [[package]]

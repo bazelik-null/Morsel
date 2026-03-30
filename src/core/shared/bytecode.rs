@@ -7,13 +7,14 @@ pub type Operand = i32;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Opcode {
     // Stack manipulation
-    PUSH_IMM = 0x00,       // Push immediate value onto stack
-    PUSH_HEAP_REF = 0x01,  // Push heap reference
-    PUSH_LOCAL_REF = 0x02, // Push local reference
-    POP = 0x03,            // Pop and discard top stack value
-    DUP = 0x04,            // Duplicate top stack value
-    SWAP = 0x05,           // Swap top two values
-    ROT = 0x06,            // Rotate top 3: [a,b,c] → [c,a,b]
+    PUSH_IMM = 0x00,       // Push i3 immediate onto stack
+    PUSH_FLOAT_IMM = 0x01, // Push f32 immediate (bitcasted as i32) onto stack
+    PUSH_HEAP_REF = 0x02,  // Push heap reference
+    PUSH_LOCAL_REF = 0x03, // Push local reference
+    POP = 0x04,            // Pop and discard top stack value
+    DUP = 0x05,            // Duplicate top stack value
+    SWAP = 0x06,           // Swap top two values
+    ROT = 0x07,            // Rotate top 3: [a,b,c] → [c,a,b]
 
     // Arithmetic
     ADD = 0x10, // Pop two values, push their sum. Polymorphic, works with strings.
@@ -66,12 +67,13 @@ impl Opcode {
     pub fn from_u8(byte: u8) -> Result<Self, String> {
         match byte {
             0x00 => Ok(Opcode::PUSH_IMM),
-            0x01 => Ok(Opcode::PUSH_HEAP_REF),
-            0x02 => Ok(Opcode::PUSH_LOCAL_REF),
-            0x03 => Ok(Opcode::POP),
-            0x04 => Ok(Opcode::DUP),
-            0x05 => Ok(Opcode::SWAP),
-            0x06 => Ok(Opcode::ROT),
+            0x01 => Ok(Opcode::PUSH_FLOAT_IMM),
+            0x02 => Ok(Opcode::PUSH_HEAP_REF),
+            0x03 => Ok(Opcode::PUSH_LOCAL_REF),
+            0x04 => Ok(Opcode::POP),
+            0x05 => Ok(Opcode::DUP),
+            0x06 => Ok(Opcode::SWAP),
+            0x07 => Ok(Opcode::ROT),
             0x10 => Ok(Opcode::ADD),
             0x11 => Ok(Opcode::SUB),
             0x12 => Ok(Opcode::MUL),
@@ -120,6 +122,17 @@ impl Instruction {
     /// Create a new instruction with the given opcode and operand.
     pub fn new(opcode: Opcode, operand: Operand) -> Self {
         Instruction { opcode, operand }
+    }
+
+    /// f32 -> i32
+    pub fn bitcast_float(value: f32) -> i32 {
+        value.to_bits() as i32 // u32 -> i32
+    }
+
+    /// i32 -> f32
+    pub fn bitcast_int(value: i32) -> f32 {
+        let float_bits = value as u32; // i32 -> u32
+        f32::from_bits(float_bits)
     }
 
     /// Encode instruction to 5-byte fixed format.
@@ -173,6 +186,9 @@ impl Display for Instruction {
         let string = match self.opcode {
             // Stack manipulation
             Opcode::PUSH_IMM => format!("PUSH.IMM {}", self.operand),
+            Opcode::PUSH_FLOAT_IMM => {
+                format!("PUSH.FLOAT.IMM {}", Instruction::bitcast_int(self.operand))
+            }
             Opcode::PUSH_HEAP_REF => format!("PUSH.HEAP.REF 0x{:06x}", self.operand),
             Opcode::PUSH_LOCAL_REF => format!("PUSH.LOCAL.REF {}", self.operand),
             Opcode::POP => "POP".to_string(),

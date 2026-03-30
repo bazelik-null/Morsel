@@ -3,37 +3,13 @@ use crate::core::shared::bytecode::{Instruction, Opcode};
 use crate::core::shared::executable::Executable;
 use crate::core::vm::error::VmError;
 use crate::core::vm::memory::{Memory, Value};
-use std::fmt::Display;
+use crate::core::vm::number::Number;
 
 pub mod debug;
 pub mod error;
-pub mod generics;
-mod memory;
+pub mod memory;
+pub mod number;
 pub mod operators;
-
-// Numeric enum
-enum Num {
-    Int(i32),
-    Float(f32),
-}
-
-impl Num {
-    fn to_f32(&self) -> f32 {
-        match self {
-            Num::Int(i) => *i as f32,
-            Num::Float(f) => *f,
-        }
-    }
-}
-
-impl Display for Num {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Num::Int(num) => write!(f, "{}", num),
-            Num::Float(num) => write!(f, "{}", num),
-        }
-    }
-}
 
 pub struct VirtualMachine {
     memory: Memory,
@@ -125,7 +101,11 @@ impl VirtualMachine {
             // Stack
             Opcode::PUSH_IMM => {
                 let value = instr.operand;
-                self.push_int(value)?;
+                self.push_num(Number::Int(value))?;
+            }
+            Opcode::PUSH_FLOAT_IMM => {
+                let value = Instruction::bitcast_int(instr.operand);
+                self.push_num(Number::Float(value))?;
             }
             Opcode::PUSH_HEAP_REF => {
                 let addr = instr.operand as usize;
@@ -205,14 +185,14 @@ impl VirtualMachine {
             }
             Opcode::JMPT => {
                 let target = instr.operand as usize;
-                let cond = self.pop_int()?;
+                let cond = self.pop_num()?.to_i32();
                 if cond != 0 {
                     self.pc = target;
                 }
             }
             Opcode::JMPF => {
                 let target = instr.operand as usize;
-                let cond = self.pop_int()?;
+                let cond = self.pop_num()?.to_i32();
                 if cond == 0 {
                     self.pc = target;
                 }
@@ -255,42 +235,45 @@ impl VirtualMachine {
     }
 
     /// Parse heap RTTI into Type and return data slice
-    fn heap_type_and_data(&self, addr: usize) -> Result<(Type, &[u8]), VmError> {
+    fn heap_get_type_and_data(&self, addr: usize) -> Result<(Type, &[u8]), VmError> {
         let (rtti, data) = self.memory.load_from_heap(addr)?;
         match Type::from_bytes(rtti).map_err(|e| VmError::type_mismatch("valid rtti", e)) {
-            Ok((ty, _consumed)) => Ok((ty, data)),
+            Ok((ty, _)) => Ok((ty, data)),
             Err(err) => Err(err),
         }
     }
 
-    /// Convert a stack Value into a numeric Num (int or float)
-    fn value_to_num(&mut self, value: Value) -> Result<Num, VmError> {
+    /// Parse heap RTTI into Type
+    fn heap_get_type(&self, addr: usize) -> Result<Type, VmError> {
+        let rtti = self.memory.load_type_from_heap(addr)?;
+        match Type::from_bytes(rtti).map_err(|e| VmError::type_mismatch("valid rtti", e)) {
+            Ok((ty, _)) => Ok(ty),
+            Err(err) => Err(err),
+        }
+    }
+
+    /// Require an integer value (Value::Int or ref to Integer)
+    pub fn require_int_value(&mut self, value: Value) -> Result<i32, VmError> {
+        match self.value_to_num(value)? {
+            Number::Int(i) => Ok(i),
+            Number::Float(f) => Err(VmError::type_mismatch("integer", format!("{}", f))),
+        }
+    }
+
+    /// Convert a stack Value or reference into a numeric Number (int or float)
+    fn value_to_num(&mut self, value: Value) -> Result<Number, VmError> {
         match value {
-            Value::Int(i) => Ok(Num::Int(i)),
+            Value::Imm(i) => Ok(i),
             Value::Ref(addr) => {
-                let (ty, data) = self.heap_type_and_data(addr)?;
+                let (ty, data) = self.heap_get_type_and_data(addr)?;
                 match ty {
                     Type::Integer => {
-                        if data.len() < 4 {
-                            return Err(VmError::type_mismatch(
-                                "integer",
-                                format!("small data at 0x{:x}", addr),
-                            ));
-                        }
-                        let mut arr = [0u8; 4];
-                        arr.copy_from_slice(&data[0..4]);
-                        Ok(Num::Int(i32::from_le_bytes(arr)))
+                        let bytes = self.extract_4_bytes(data, addr)?;
+                        Ok(Number::Int(i32::from_le_bytes(bytes)))
                     }
                     Type::Float => {
-                        if data.len() < 4 {
-                            return Err(VmError::type_mismatch(
-                                "float",
-                                format!("small data at 0x{:x}", addr),
-                            ));
-                        }
-                        let mut arr = [0u8; 4];
-                        arr.copy_from_slice(&data[0..4]);
-                        Ok(Num::Float(f32::from_le_bytes(arr)))
+                        let bytes = self.extract_4_bytes(data, addr)?;
+                        Ok(Number::Float(f32::from_le_bytes(bytes)))
                     }
                     _ => Err(VmError::type_mismatch(
                         "numeric",
@@ -301,41 +284,34 @@ impl VirtualMachine {
         }
     }
 
+    /// Extract 4 bytes from data
+    fn extract_4_bytes(&self, data: &[u8], addr: usize) -> Result<[u8; 4], VmError> {
+        if data.len() < 4 {
+            return Err(VmError::type_mismatch(
+                "4 bytes",
+                format!("small data at 0x{:x}", addr),
+            ));
+        }
+        let mut arr = [0u8; 4];
+        arr.copy_from_slice(&data[0..4]);
+        Ok(arr)
+    }
+
     /// Convert a stack Value into a string
     fn value_to_string(&mut self, value: &Value) -> Result<String, VmError> {
         match value {
             Value::Ref(addr) => {
-                let (ty, data) = self.heap_type_and_data(*addr)?;
+                let (ty, data) = self.heap_get_type_and_data(*addr)?;
                 if ty == Type::String {
                     Ok(std::str::from_utf8(data).unwrap_or_default().to_string())
                 } else {
                     match self.value_to_num(Value::Ref(*addr))? {
-                        Num::Int(i) => Ok(i.to_string()),
-                        Num::Float(f) => Ok(f.to_string()),
+                        Number::Int(i) => Ok(i.to_string()),
+                        Number::Float(f) => Ok(f.to_string()),
                     }
                 }
             }
-            Value::Int(i) => Ok(i.to_string()),
-        }
-    }
-
-    /// Get value type
-    fn get_type(&mut self, value: &Value) -> Result<Option<Type>, VmError> {
-        match value {
-            Value::Ref(addr) => Ok(Some(self.heap_type_and_data(*addr)?.0)),
-            Value::Int(_) => Ok(Some(Type::Integer)),
-        }
-    }
-
-    /// Prefer integer if exact and fits i32, otherwise allocate float on heap.
-    fn push_num(&mut self, n: Num) -> Result<(), VmError> {
-        match n {
-            Num::Int(i) => self.push_int(i),
-            Num::Float(f) => {
-                let (rtti, data) = self.build_data(f.to_le_bytes(), Type::Float)?;
-                let addr = self.memory.save_to_heap(&rtti, &data, false)?;
-                self.push_ref(addr)
-            }
+            Value::Imm(i) => Ok(i.to_string()),
         }
     }
 
@@ -352,14 +328,14 @@ impl VirtualMachine {
         Ok((rtti_bytes.to_vec(), bytes.to_vec()))
     }
 
-    fn push_int(&mut self, value: i32) -> Result<(), VmError> {
-        self.memory.push(Value::Int(value))
+    fn push_num(&mut self, n: Number) -> Result<(), VmError> {
+        self.memory.push(Value::Imm(n))
     }
 
-    fn pop_int(&mut self) -> Result<i32, VmError> {
+    fn pop_num(&mut self) -> Result<Number, VmError> {
         let val = self.memory.pop()?;
-        let i = val.as_int()?;
-        Ok(i)
+        let num = val.as_num()?;
+        Ok(num)
     }
 
     fn push_ref(&mut self, addr: usize) -> Result<(), VmError> {

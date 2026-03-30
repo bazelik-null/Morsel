@@ -1,6 +1,7 @@
 use crate::core::compiler::error_handler::CompilerError;
 use crate::core::compiler::preprocessor::token::{
-    KeywordValue, LexerOutput, LiteralValue, Number, OperatorValue, SyntaxValue, Token, TokenType,
+    KeywordValue, LexerOutput, LiteralValue, OperatorValue, SyntaxValue, Token, TokenNumber,
+    TokenType,
 };
 use crate::core::compiler::source::SourceCode;
 use lasso::{Rodeo, Spur};
@@ -70,10 +71,10 @@ impl<'a> Lexer<'a> {
             '0'..='9' => {
                 let number = self.parse_number();
                 match number {
-                    Number::Integer(value) => {
+                    TokenNumber::Integer(value) => {
                         self.push_token(TokenType::Literal(LiteralValue::Integer(value)), 1)
                     }
-                    Number::Float(value) => {
+                    TokenNumber::Float(value) => {
                         self.push_token(TokenType::Literal(LiteralValue::Float(value)), 1)
                     }
                 }
@@ -156,7 +157,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// Parses a numeric literal (integer or float)
-    fn parse_number(&mut self) -> Number {
+    fn parse_number(&mut self) -> TokenNumber {
         let mut number_str = String::new();
         let mut is_float = false;
         let mut has_error = false;
@@ -197,22 +198,22 @@ impl<'a> Lexer<'a> {
         // Parse the string into a number
         if is_float {
             match number_str.parse::<f32>() {
-                Ok(value) => Number::Float(value),
+                Ok(value) => TokenNumber::Float(value),
                 Err(_) => {
                     if !has_error {
                         self.error("Invalid float literal", number_str.len() as u16);
                     }
-                    Number::Float(0.0)
+                    TokenNumber::Float(0.0)
                 }
             }
         } else {
             match number_str.parse::<i32>() {
-                Ok(value) => Number::Integer(value),
+                Ok(value) => TokenNumber::Integer(value),
                 Err(_) => {
                     if !has_error {
                         self.error("Invalid integer literal", number_str.len() as u16);
                     }
-                    Number::Integer(0)
+                    TokenNumber::Integer(0)
                 }
             }
         }

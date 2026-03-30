@@ -1,18 +1,19 @@
 use crate::core::compiler::parser::tree::Type;
 use crate::core::vm::error::VmError;
+use crate::core::vm::Number;
 use colored::Colorize;
 use std::collections::{BTreeMap, HashSet};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Value {
-    Int(i32),
+    Imm(Number),
     Ref(usize),
 }
 
 impl Value {
-    pub fn as_int(&self) -> Result<i32, VmError> {
+    pub fn as_num(&self) -> Result<Number, VmError> {
         match self {
-            Value::Int(i) => Ok(*i),
+            Value::Imm(i) => Ok(*i),
             Value::Ref(_) => Err(VmError::TypeMismatch("reference", "integer".to_string())),
         }
     }
@@ -20,12 +21,16 @@ impl Value {
     pub fn as_ref(&self) -> Result<usize, VmError> {
         match self {
             Value::Ref(addr) => Ok(*addr),
-            Value::Int(_) => Err(VmError::TypeMismatch("integer", "reference".to_string())),
+            Value::Imm(_) => Err(VmError::TypeMismatch("immediate", "reference".to_string())),
         }
     }
 
     pub fn is_ref(&self) -> bool {
         matches!(self, Value::Ref(_))
+    }
+
+    pub fn is_imm(&self) -> bool {
+        matches!(self, Value::Imm(_))
     }
 }
 
@@ -342,7 +347,7 @@ impl Memory {
     pub fn set_local(&mut self, index: usize, value: Value) -> Result<(), VmError> {
         let frame = self.current_frame_mut()?;
         if index >= frame.locals.len() {
-            frame.locals.resize(index + 1, Value::Int(0));
+            frame.locals.resize(index + 1, value);
         }
         frame.locals[index] = value;
         Ok(())
@@ -373,6 +378,17 @@ impl Memory {
         let data = self.read_bytes(data_start, data_len)?;
 
         Ok((rtti, data))
+    }
+
+    /// Load a variable RTTI from the heap
+    pub fn load_type_from_heap(&self, addr: usize) -> Result<&[u8], VmError> {
+        // Read RTTI length
+        let rtti_len = self.read_u8(addr)? as usize;
+        let rtti_start = addr + 1;
+        // Read RTTI
+        let rtti = self.read_bytes(rtti_start, rtti_len)?;
+
+        Ok(rtti)
     }
 
     /// Save a variable to the heap (RTTI + data). Returns address.

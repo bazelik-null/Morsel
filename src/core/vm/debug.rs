@@ -25,11 +25,8 @@ impl VirtualMachine {
         println!(" {}", "═".repeat(75).cyan());
 
         while !self.halted && self.pc < self.instructions.len() {
-            if self.debug {
-                self.print_debug_line()?;
-            }
+            self.print_debug_line()?;
             self.step()?;
-            std::thread::sleep(std::time::Duration::from_millis(1));
         }
 
         self.memory.collect_garbage()?; // Collect garbage on exit
@@ -72,7 +69,7 @@ impl VirtualMachine {
         let items: Vec<String> = stack
             .iter()
             .map(|v| match v {
-                Value::Int(n) => format!("Int<{}>", n).green().to_string(),
+                Value::Imm(n) => format!("Imm<{}>", n).green().to_string(),
                 Value::Ref(addr) => format!("Ref<0x{:x}>", addr).bright_cyan().to_string(),
             })
             .collect();
@@ -210,7 +207,7 @@ impl VirtualMachine {
             .iter()
             .map(|(&base, alloc)| {
                 let type_name = self
-                    .heap_type_and_data(base)
+                    .heap_get_type_and_data(base)
                     .map(|(ty, _)| format!("{:?}", ty))
                     .unwrap_or_else(|_| "unknown".to_string());
 

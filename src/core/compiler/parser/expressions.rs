@@ -1,8 +1,6 @@
-use crate::core::compiler::parser::tree::Node;
 use crate::core::compiler::parser::Parser;
-use crate::core::compiler::preprocessor::token::{
-    OperatorValue, SyntaxValue, TokenType,
-};
+use crate::core::compiler::parser::tree::Node;
+use crate::core::compiler::preprocessor::token::{OperatorValue, SyntaxValue, TokenType};
 use crate::core::shared::builtin_func::SysCallId;
 use std::str::FromStr;
 

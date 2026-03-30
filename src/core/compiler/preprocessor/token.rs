@@ -53,7 +53,7 @@ pub enum LiteralValue {
     String(Spur),
 }
 
-pub enum Number {
+pub enum TokenNumber {
     Integer(i32),
     Float(f32),
 }

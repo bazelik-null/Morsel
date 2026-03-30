@@ -2,6 +2,7 @@ use crate::core::compiler::codegen::{CodeGenerator, Scope};
 use crate::core::compiler::parser::tree::{Node, Parameter, Type};
 use crate::core::compiler::preprocessor::token::{LiteralValue, OperatorValue};
 use crate::core::shared::builtin_func::SysCallId;
+use crate::core::shared::bytecode::Instruction;
 use crate::core::shared::bytecode::Opcode::*;
 use lasso::Spur;
 
@@ -62,11 +63,12 @@ impl<'a> CodeGenerator<'a> {
                 let value = *value as i32;
                 self.emit(PUSH_IMM, value)
             }
-
-            // Push to data section as reference
+            // Bitcast and push to stack as immediate
             LiteralValue::Float(value) => {
-                self.insert_data(value.to_le_bytes(), Type::Float)?;
+                let value = Instruction::bitcast_float(*value);
+                self.emit(PUSH_FLOAT_IMM, value);
             }
+
             // Push to data section as reference
             LiteralValue::String(value) => {
                 let value = self.rodeo.resolve(value);
