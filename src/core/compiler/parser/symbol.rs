@@ -1,4 +1,4 @@
-use crate::core::compiler::parser::tree::Type;
+use crate::core::shared::types::Type;
 use lasso::Spur;
 use std::collections::HashMap;
 

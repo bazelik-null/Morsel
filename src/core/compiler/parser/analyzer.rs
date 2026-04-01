@@ -1,9 +1,10 @@
 use crate::core::compiler::parser::symbol::{ScopeStack, Symbol};
-use crate::core::compiler::parser::tree::{Node, Type};
+use crate::core::compiler::parser::tree::Node;
 use crate::core::compiler::parser::type_inference::{
     infer_binary_type, infer_literal_type, infer_unary_type,
 };
 use crate::core::compiler::preprocessor::token::LiteralValue;
+use crate::core::shared::types::Type;
 use lasso::{Rodeo, Spur};
 use std::collections::HashMap;
 

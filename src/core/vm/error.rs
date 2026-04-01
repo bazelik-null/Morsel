@@ -24,6 +24,8 @@ pub enum VmError {
     TypeMismatch(&'static str, String),
     Runtime(String),
     InvalidExecutable,
+    CorruptedObject(String),
+    GcError(String),
 }
 
 impl VmError {
@@ -73,6 +75,8 @@ impl fmt::Display for VmError {
             }
             VmError::Runtime(err) => write!(f, "Runtime error: {}", err),
             VmError::InvalidExecutable => write!(f, "Invalid executable"),
+            VmError::CorruptedObject(addr) => write!(f, "Corrupted object at: {}", addr),
+            VmError::GcError(err) => write!(f, "Garbage collector error: {}", err),
         }
     }
 }

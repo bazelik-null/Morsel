@@ -1,5 +1,5 @@
-use crate::core::compiler::parser::tree::Type;
 use crate::core::compiler::preprocessor::token::{LiteralValue, OperatorValue};
+use crate::core::shared::types::Type;
 
 pub fn infer_literal_type(lit: &LiteralValue) -> Type {
     match lit {

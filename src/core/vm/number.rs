@@ -1,4 +1,5 @@
 #![allow(clippy::should_implement_trait)]
+use crate::core::vm::error::VmError;
 use std::cmp::Ordering;
 use std::fmt::Display;
 
@@ -134,5 +135,35 @@ impl Display for Number {
             Number::Int(num) => write!(f, "{}", num),
             Number::Float(num) => write!(f, "{}", num),
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Value {
+    Imm(Number),
+    Ref(usize),
+}
+
+impl Value {
+    pub fn as_num(&self) -> Result<Number, VmError> {
+        match self {
+            Value::Imm(i) => Ok(*i),
+            Value::Ref(_) => Err(VmError::TypeMismatch("reference", "integer".to_string())),
+        }
+    }
+
+    pub fn as_ref(&self) -> Result<usize, VmError> {
+        match self {
+            Value::Ref(addr) => Ok(*addr),
+            Value::Imm(_) => Err(VmError::TypeMismatch("immediate", "reference".to_string())),
+        }
+    }
+
+    pub fn is_ref(&self) -> bool {
+        matches!(self, Value::Ref(_))
+    }
+
+    pub fn is_imm(&self) -> bool {
+        matches!(self, Value::Imm(_))
     }
 }

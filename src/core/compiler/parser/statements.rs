@@ -1,8 +1,9 @@
 use crate::core::compiler::parser::Parser;
-use crate::core::compiler::parser::tree::{Node, Parameter, Type};
+use crate::core::compiler::parser::tree::{Node, Parameter};
 use crate::core::compiler::preprocessor::token::{
     KeywordValue, LiteralValue, SyntaxValue, TokenType,
 };
+use crate::core::shared::types::Type;
 
 impl<'a> Parser<'a> {
     pub fn parse_statement_or_expression(&mut self) -> Result<Node, ()> {

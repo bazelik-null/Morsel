@@ -1,9 +1,10 @@
 use crate::core::compiler::codegen::{CodeGenerator, Scope};
-use crate::core::compiler::parser::tree::{Node, Parameter, Type};
+use crate::core::compiler::parser::tree::{Node, Parameter};
 use crate::core::compiler::preprocessor::token::{LiteralValue, OperatorValue};
 use crate::core::shared::builtin_func::SysCallId;
 use crate::core::shared::bytecode::Instruction;
 use crate::core::shared::bytecode::Opcode::*;
+use crate::core::shared::types::Type;
 use lasso::Spur;
 
 impl<'a> CodeGenerator<'a> {

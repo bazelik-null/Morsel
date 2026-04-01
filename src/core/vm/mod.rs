@@ -1,9 +1,9 @@
-use crate::core::compiler::parser::tree::Type;
 use crate::core::shared::bytecode::{Instruction, Opcode};
 use crate::core::shared::executable::Executable;
+use crate::core::shared::types::Type;
 use crate::core::vm::error::VmError;
-use crate::core::vm::memory::{Memory, Value};
-use crate::core::vm::number::Number;
+use crate::core::vm::memory::Memory;
+use crate::core::vm::number::{Number, Value};
 
 pub mod debug;
 pub mod error;
@@ -35,36 +35,32 @@ impl VirtualMachine {
         let data = &executable.data;
         let mut offset = 0usize;
 
-        // For each item: copy it int heap
         while offset < data.len() {
-            if offset + 1 + 4 > data.len() {
+            // Check if we can read the header (16 bytes)
+            if offset + 16 > data.len() {
                 return Err(VmError::InvalidExecutable);
             }
 
-            let rtti_len = data[offset] as usize;
-            let rtti_start = offset + 1;
-            if rtti_start + rtti_len + 4 > data.len() {
-                return Err(VmError::InvalidExecutable);
-            }
-
-            let data_len_start = rtti_start + rtti_len;
-            let data_len = u32::from_le_bytes([
-                data[data_len_start],
-                data[data_len_start + 1],
-                data[data_len_start + 2],
-                data[data_len_start + 3],
+            // Read total size from header at bytes 0-3
+            let total_size = u32::from_le_bytes([
+                data[offset],
+                data[offset + 1],
+                data[offset + 2],
+                data[offset + 3],
             ]) as usize;
 
-            let total_size = 1 + rtti_len + 4 + data_len;
+            // Validate total size
+            if total_size < 16 + 16 + 4 {
+                return Err(VmError::InvalidExecutable);
+            }
+
             if offset + total_size > data.len() {
                 return Err(VmError::InvalidExecutable);
             }
 
-            // Allocate a block for this single item
-            let addr = self.memory.allocate(total_size, true)?;
-            // Copy the record into heap
+            // Load the object
             self.memory
-                .write_bytes(addr, &data[offset..offset + total_size])?;
+                .load_from_executable(&data[offset..offset + total_size], true)?;
 
             offset += total_size;
         }

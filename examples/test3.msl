@@ -1,0 +1,13 @@
+// Test file
+
+func main() {
+    let msg = "Hello";
+    let mut i = 0;
+    // Allocate 100.000 msg + msg strings
+    while (i < 100000) {
+        // Allocates a msg2 in the heap which is "HelloHello"
+        let msg2 = msg + msg;
+//        print(msg2)
+        i = i + 1;
+    }
+}

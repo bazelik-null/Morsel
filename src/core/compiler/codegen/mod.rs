@@ -1,10 +1,11 @@
 pub mod generator;
 
 use crate::core::compiler::linker::Linker;
-use crate::core::compiler::parser::tree::{Node, Type};
+use crate::core::compiler::parser::tree::Node;
 use crate::core::shared::bytecode::Opcode::*;
 use crate::core::shared::bytecode::{Instruction, Opcode, Operand};
 use crate::core::shared::executable::Executable;
+use crate::core::shared::types::Type;
 use lasso::{Rodeo, Spur};
 use std::collections::HashMap;
 
@@ -162,7 +163,7 @@ impl<'a> CodeGenerator<'a> {
     }
 
     /// Allocate data and request relocation for the next instruction.
-    /// Layout: `[rtti_len (1 byte) | rtti_bytes | data_len (4 bytes) | data_bytes]`
+    /// Layout: `[Header (16 bytes) | RTTI (fixed) | Data length (4 bytes) | Data (variable)]`
     fn insert_data<T: AsRef<[u8]>>(&mut self, value: T, rtti: Type) -> Result<(), String> {
         let bytes = value.as_ref();
         let rtti_bytes = rtti.to_bytes();
@@ -179,12 +180,20 @@ impl<'a> CodeGenerator<'a> {
         // Build the complete data block with header
         let mut data_block = Vec::new();
 
-        // Construct header
-        let rtti_len = rtti_bytes.len() as u8;
-        let data_len = bytes.len() as u32;
-        data_block.push(rtti_len);
+        // Calculate total size: header + RTTI + data_len (4 bytes) + data
+        let total_size = 16 + 16 + 4 + bytes.len();
+
+        // Write header (16 bytes)
+        data_block.extend_from_slice(&(total_size as u32).to_le_bytes());
+        data_block.extend_from_slice(&[0u8; 12]);
+
+        // Write RTTI (16 bytes)
         data_block.extend_from_slice(&rtti_bytes);
-        data_block.extend_from_slice(&data_len.to_le_bytes());
+
+        // Write data length (4 bytes)
+        data_block.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
+
+        // Write data (variable)
         data_block.extend_from_slice(bytes);
 
         // Push data

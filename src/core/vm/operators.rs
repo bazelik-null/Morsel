@@ -1,8 +1,8 @@
-use crate::core::compiler::parser::tree::Type;
 use crate::core::shared::builtin_func::SysCallId;
 use crate::core::shared::bytecode::Opcode;
+use crate::core::shared::types::Type;
 use crate::core::vm::error::VmError;
-use crate::core::vm::memory::Value;
+use crate::core::vm::number::Value;
 use crate::core::vm::{Number, VirtualMachine};
 use std::io;
 use std::io::Write;
@@ -199,7 +199,12 @@ impl VirtualMachine {
     /// Pop reference address (an address to a heap object) and push value or ref
     pub fn op_load(&mut self) -> Result<(), VmError> {
         let addr = self.pop_ref()?;
-        let (ty, data) = self.heap_get_type_and_data(addr)?;
+        let (rtti_bytes, data) = self.memory.load_from_heap(addr)?;
+
+        let ty = Type::from_bytes(rtti_bytes)
+            .map_err(|_| VmError::CorruptedObject(addr.to_string()))?
+            .0;
+
         match ty {
             Type::Integer => {
                 let bytes = self.extract_4_bytes(data, addr)?;
@@ -228,33 +233,32 @@ impl VirtualMachine {
         // If value is numeric and target expects numeric, write payload
         if let Value::Imm(num) = val {
             let ty = self.heap_get_type(addr)?;
-            if ty != Type::Integer || ty != Type::Float {
+            if ty != Type::Integer && ty != Type::Float {
                 return Err(VmError::type_mismatch(
                     "integer or float target",
                     format!("{:?}", ty),
                 ));
             }
 
-            // Write to heap
-            let mut buf = ty.to_bytes();
-            match num {
-                Number::Int(i) => buf.extend(&i.to_le_bytes()),
-                Number::Float(f) => buf.extend(&f.to_le_bytes()),
-            }
-            self.memory.write_bytes(addr, &buf)?;
+            // Build data payload
+            let data = match num {
+                Number::Int(i) => i.to_le_bytes().to_vec(),
+                Number::Float(f) => f.to_le_bytes().to_vec(),
+            };
+
+            let rtti = ty.to_bytes();
+            self.memory.save_to_heap(&rtti, &data, false)?;
 
             return Ok(());
         }
 
-        // If val is a ref, copy the source object's RTTI+data into destination
+        // If val is a ref, copy the source object's data into destination
         if let Value::Ref(src_addr) = val {
-            let (rtti_src, data_src) = self.memory.load_from_heap(src_addr)?;
-            // Write to heap
-            let mut buf = Vec::with_capacity(rtti_src.len() + data_src.len());
-            buf.extend_from_slice(rtti_src);
-            buf.extend_from_slice(data_src);
-            self.memory.write_bytes(addr, &buf)?;
-
+            let (rtti, data) = self.memory.load_from_heap(src_addr)?;
+            // Clone the data (borrow checker is angry)
+            let rtti_copy = rtti.to_owned();
+            let data_copy = data.to_owned();
+            self.memory.save_to_heap(&rtti_copy, &data_copy, false)?;
             return Ok(());
         }
 
