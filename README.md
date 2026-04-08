@@ -75,6 +75,7 @@ Morsel combines some unique features that set it apart from typical interpreted 
 - **Compile-Time Safety Checks** - Semantic analyzer enforces safety rules before code generation, preventing *most*
   runtime errors.
 - **Explicit Control Flow** - No implicit type conversion or hidden control flow. What you write is what executes.
+- **Optional semicolons** - Semicolons are optional (but good news semicolons fans, you can explicitly insert them ;-;)
 - **Garbage Collection** - Efficient tracing garbage collector which manages memory and enforces memory safety.
 - **Built in Rust** - Because everything should be. Including programming languages, apparently.
 

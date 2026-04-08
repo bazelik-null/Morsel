@@ -6,6 +6,7 @@ to write morsel programs.
 ## Table of Contents
 
 1. [Comments](#comments)
+2. [Semicolons](#semicolons)
 2. [Variables and Mutability](#variables-and-mutability)
 3. [Data Types](#data-types)
 4. [References](#references)
@@ -24,6 +25,28 @@ Comments explain your code without affecting execution.
 ```morsel
 // This is a single-line comment
 let x = 5; // Comment after code
+```
+
+## Semicolons
+
+All newlines automatically act like semicolons
+
+```morsel
+let i = 1 + 1
+println(i)
+```
+
+But you can explicitly insert them
+
+```morsel
+let i = 1 + 1; let j = 2 + 2;
+println(i + j)
+```
+
+Keywords act like semicolons too (yep, it's cursed)
+
+```morsel
+let i = 1 + 1 let j = 2 + 2 println(i + j)
 ```
 
 ## Variables and Mutability
