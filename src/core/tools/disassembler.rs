@@ -1,5 +1,6 @@
 use crate::core::shared::bytecode::Opcode;
 use crate::core::shared::executable::Executable;
+use crate::core::shared::types::Type;
 use colored::Colorize;
 use std::collections::HashSet;
 
@@ -85,57 +86,199 @@ impl Disassembler {
         output.push_str(&"─".repeat(75).yellow().to_string());
         output.push('\n');
 
-        let data = &executable.data;
-
-        // Max visual width of hex dump (16 bytes = 47 chars)
-        let max_hex_width = 47;
-
+        // Column header
         output.push_str(&format!(
-            "  {:<8} {:<width$} {}\n",
-            "Offset".bright_white().bold(),
-            "Hex Dump".bright_white().bold(),
-            "ASCII".bright_white().bold(),
-            width = max_hex_width
+            "  {:<10} {:<8} {}\n\n",
+            "Address".bright_white().bold(),
+            "Type".bright_white().bold(),
+            "Data".bright_white().bold()
         ));
 
-        for (i, chunk) in data.chunks(16).enumerate() {
-            let offset = i * 16;
+        let data = &executable.data;
+        let mut off = 0usize;
 
-            // Build hex string with colors
-            let hex_colored = chunk
-                .iter()
-                .map(|b| format!("{:02x}", b).bright_black().to_string())
-                .collect::<Vec<_>>()
-                .join(" ");
+        while off < data.len() {
+            // Need header (16 bytes)
+            if off + 16 > data.len() {
+                let rem = &data[off..];
+                let hex = rem
+                    .iter()
+                    .map(|b| format!("{:06x}", b))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                output.push_str(&format!(
+                    "  {}  {:<20} {}\n",
+                    format!("0x{:06x}", off).cyan(),
+                    "<truncated header>".bright_red(),
+                    hex.bright_black()
+                ));
+                break;
+            }
 
-            // Calculate visual length (without ANSI codes)
-            let hex_visual_len = chunk.len() * 3 - 1;
+            let total_size = u32::from_le_bytes(data[off..off + 4].try_into().unwrap()) as usize;
+            let rtti_bytes = &data[off + 4..off + 12];
+            let data_len =
+                u32::from_le_bytes(data[off + 12..off + 16].try_into().unwrap()) as usize;
+            let payload_start = off + 16;
+            let payload_end = payload_start.saturating_add(data_len);
 
-            // Pad with spaces to align ASCII column
-            let hex_padded = format!(
-                "{}{}",
-                hex_colored,
-                " ".repeat(max_hex_width - hex_visual_len + 2)
-            );
+            // Validate
+            if total_size < 16 || payload_end > data.len() || total_size != 16 + data_len {
+                let snippet = &data[off..std::cmp::min(data.len(), off + 32)];
+                let hex = snippet
+                    .iter()
+                    .map(|b| format!("{:02x}", b))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                output.push_str(&format!(
+                    "  {}  {:<20} {}\n",
+                    format!("0x{:06x}", off).cyan(),
+                    "<malformed>".bright_red(),
+                    hex.bright_black()
+                ));
+                off += 1;
+                continue;
+            }
 
-            let ascii_str = chunk
-                .iter()
-                .map(|&b| {
-                    if (32..=126).contains(&b) {
-                        (b as char).to_string().bright_black().to_string()
-                    } else {
-                        ".".bright_black().to_string()
+            let payload = &data[payload_start..payload_end];
+
+            // RTTI
+            let type_label = match Type::from_bytes(rtti_bytes) {
+                Ok((t, _)) => format!("{}", t).green().to_string(),
+                Err(_) => format!(
+                    "RTTI(0x{})",
+                    rtti_bytes
+                        .iter()
+                        .map(|b| format!("{:02x}", b))
+                        .collect::<String>()
+                )
+                .bright_red()
+                .to_string(),
+            };
+
+            let data_label = match Type::from_bytes(rtti_bytes) {
+                Ok((t, _)) => match t {
+                    Type::Integer => {
+                        if payload.len() >= 4 {
+                            let v = i32::from_le_bytes(payload[..4].try_into().unwrap());
+                            format!("int({})", v)
+                        } else {
+                            format!("int(<{} bytes>)", payload.len())
+                        }
                     }
-                })
-                .collect::<String>();
+                    Type::Float => {
+                        if payload.len() >= 4 {
+                            let v = f32::from_le_bytes(payload[..4].try_into().unwrap());
+                            format!("float({})", v)
+                        } else {
+                            format!("float(<{} bytes>)", payload.len())
+                        }
+                    }
+                    Type::Boolean => {
+                        let b = payload.first().map(|x| *x != 0).unwrap_or(false);
+                        format!("bool({})", b)
+                    }
+                    Type::String => match std::str::from_utf8(payload) {
+                        Ok(s) => format!("\"{}\"", s),
+                        Err(_) => format!("string(<invalid utf8, {} bytes>)", payload.len()),
+                    },
+                    Type::Array(_) => {
+                        if payload.len() >= 4 {
+                            let cnt = u32::from_le_bytes(payload[..4].try_into().unwrap());
+                            format!("array(len={})", cnt)
+                        } else {
+                            "array(<truncated>)".to_string()
+                        }
+                    }
+                    Type::FixedArray(elem, size) => {
+                        let mut elems = Vec::new();
+                        let mut cur = 0;
+                        for _ in 0..size {
+                            if cur >= payload.len() {
+                                elems.push("<trunc>".to_string());
+                                break;
+                            }
+                            match *elem {
+                                Type::Integer => {
+                                    if cur + 4 <= payload.len() {
+                                        elems.push(format!(
+                                            "{}",
+                                            i32::from_le_bytes(
+                                                payload[cur..cur + 4].try_into().unwrap()
+                                            )
+                                        ));
+                                        cur += 4;
+                                    } else {
+                                        elems.push("<trunc>".to_string());
+                                        break;
+                                    }
+                                }
+                                Type::Float => {
+                                    if cur + 4 <= payload.len() {
+                                        elems.push(format!(
+                                            "{}",
+                                            f32::from_le_bytes(
+                                                payload[cur..cur + 4].try_into().unwrap()
+                                            )
+                                        ));
+                                        cur += 4;
+                                    } else {
+                                        elems.push("<trunc>".to_string());
+                                        break;
+                                    }
+                                }
+                                Type::String => {
+                                    elems.push("<string>".to_string());
+                                    break;
+                                }
+                                _ => {
+                                    elems.push("<val>".to_string());
+                                    break;
+                                }
+                            }
+                        }
+                        format!("[{}]", elems.join(", "))
+                    }
+                    Type::Reference(_) | Type::MutableReference(_) => {
+                        if payload.len() >= 4 {
+                            format!(
+                                "ref(0x{:08x})",
+                                u32::from_le_bytes(payload[..4].try_into().unwrap())
+                            )
+                        } else {
+                            "ref(<trunc>)".to_string()
+                        }
+                    }
+                    Type::Void => "void".to_string(),
+                },
+                Err(_) => {
+                    // fallback hex
+                    let hex = payload
+                        .iter()
+                        .map(|b| format!("{:02x}", b))
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    format!("0x{}", hex)
+                }
+            };
+
+            // Trim long data_label
+            let data_trim = if data_label.len() > 60 {
+                format!("{}...", &data_label[..57])
+            } else {
+                data_label
+            };
 
             output.push_str(&format!(
-                "  {}  {}{}\n",
-                format!("0x{:04x}", offset).cyan(),
-                hex_padded,
-                ascii_str
+                "  {}   {:<17} {}\n",
+                format!("0x{:06x}", off).cyan(),
+                type_label,
+                data_trim.bright_black()
             ));
+
+            off += total_size;
         }
+
         output.push('\n');
     }
 
@@ -144,11 +287,10 @@ impl Disassembler {
         output.push_str(&"─".repeat(75).yellow().to_string());
         output.push('\n');
         output.push_str(&format!(
-            "  {:<10} {}\n",
+            "  {:<9} {}\n",
             "Address".bright_white().bold(),
             "Instruction".bright_white().bold()
         ));
-        output.push('\n');
 
         // Build function entry point map
         let function_entries = Self::collect_function_entries(executable);
