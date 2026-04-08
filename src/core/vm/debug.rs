@@ -1,7 +1,9 @@
+#![allow(clippy::collapsible_if)]
+
 use crate::core::shared::types::Type;
-use crate::core::vm::VirtualMachine;
 use crate::core::vm::error::VmError;
 use crate::core::vm::number::Value;
+use crate::core::vm::VirtualMachine;
 use colored::Colorize;
 use std::collections::{HashMap, HashSet, VecDeque};
 
